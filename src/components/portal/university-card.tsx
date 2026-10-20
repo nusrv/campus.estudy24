@@ -1,0 +1,6 @@
+import { Check, MapPin, University } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+export function UniversityCard({ name, city, abbreviation, color, selected, onSelect }: { name: string; city: string; abbreviation: string; color: string; selected: boolean; onSelect: () => void }) {
+  return <button type="button" onClick={onSelect} aria-pressed={selected} className={cn("relative flex w-full items-center gap-4 rounded-[18px] border bg-white p-5 text-start transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-primary/20", selected ? "border-primary bg-[#f5fbf8]" : "border-border hover:border-[#bdc9c3]")}><span className="flex size-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl bg-muted" style={{ color }}><University className="size-6" /><span className="text-[8px] font-medium tracking-wider" lang="en">{abbreviation}</span></span><span><span className="block text-sm font-medium">{name}</span><span className="mt-2 flex items-center gap-1 text-xs text-secondary-foreground"><MapPin className="size-3" />{city}</span></span><span className={cn("ms-auto flex size-5 shrink-0 items-center justify-center rounded-full border", selected ? "border-primary bg-primary text-white" : "border-border")}>{selected && <Check className="size-3" />}</span></button>;
+}

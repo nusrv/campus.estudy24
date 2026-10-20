@@ -1,0 +1,17 @@
+{
+  "articles": [
+    {
+      "university_slug": "uqu",
+      "source_id": "179777",
+      "source_url": "https://uqu.edu.sa/App/News/179777",
+      "title": "نموذج خبر للاختبار",
+      "summary": "ملخص توضيحي",
+      "content_text": "نص الخبر للاختبار",
+      "published_at": "2026-10-18T14:06:32Z",
+      "image_urls": [],
+      "pdf_urls": [],
+      "registration_links": [],
+      "category": "training"
+    }
+  ]
+}

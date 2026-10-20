@@ -1,0 +1,43 @@
+@import "tailwindcss";
+
+:root {
+  --background: #F7F8FA;
+  --card: #FFFFFF;
+  --foreground: #182230;
+  --secondary-foreground: #667085;
+  --border: #E5E7EB;
+  --primary: #147D64;
+  --accent: #E3F3EE;
+  --muted: #F7F8FA;
+  --radius: 0.75rem;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-border: var(--border);
+  --color-primary: var(--primary);
+  --color-accent: var(--accent);
+  --color-muted: var(--muted);
+  --font-sans: "IBM Plex Sans Arabic", sans-serif;
+  --shadow-soft: 0 2px 8px rgb(24 34 48 / 0.035);
+}
+
+html { scroll-behavior: smooth; scrollbar-gutter: stable; }
+body { background: var(--background); color: var(--foreground); font-family: var(--font-sans); -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+button, a, input { -webkit-tap-highlight-color: transparent; }
+button:not(:disabled), [role="button"] { cursor: pointer; }
+button:focus-visible, a:focus-visible { outline: 2px solid var(--primary); outline-offset: 4px; }
+::selection { background: #c9e8dc; color: #182230; }
+.type-row { display: flex; flex-direction: column; gap: 8px; }
+.type-row + .type-row { border-top: 1px solid #f0f1f3; padding-top: 16px; }
+.type-spec { display: flex; align-items: center; gap: 12px; color: #98a2b3; font-size: 10px; }
+.type-spec b { font-weight: 400; direction: ltr; font-size: 9px; }
+.skip-link { position: fixed; inset-block-start: 12px; inset-inline-start: 12px; z-index: 100; transform: translateY(-160%); background: white; border: 1px solid var(--primary); border-radius: 12px; padding: 10px 20px; }
+.skip-link:focus { transform: translateY(0); }
+.filter-label { display: flex; min-width: 140px; flex-direction: column; gap: 8px; color: var(--secondary-foreground); font-size: 12px; }
+.public-select { height: 44px; width: 100%; border-radius: 12px; border: 1px solid var(--border); background: white; padding-inline: 12px; color: var(--foreground); font-size: 13px; }
+.public-select:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; } }

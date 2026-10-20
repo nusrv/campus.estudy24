@@ -1,0 +1,388 @@
+generator client {
+  provider = "prisma-client-js"
+  engineType = "client"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum PublicationStatus {
+  pending_review
+  approved
+  published
+  unpublished
+  hidden
+}
+
+enum OriginType {
+  manual
+  imported
+}
+
+enum AdminRole {
+  owner
+  editor
+}
+
+enum AdvertisementStatus {
+  active
+  paused
+  archived
+}
+
+enum MediaKind {
+  image
+  pdf
+}
+
+enum EventKind {
+  event
+  academic_date
+  registration
+  examination
+}
+
+enum PlatformContentType {
+  platform_news
+  blog
+  guide
+  topic
+}
+
+enum ManagedLinkKind {
+  general
+  official
+  academic_calendar
+  timetable
+  student_service
+  admission
+  learning_resource
+}
+
+model University {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String   @default("")
+  city        String   @default("")
+  region      String   @default("")
+  websiteUrl  String?
+  logoUrl     String?
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  articles    Article[]
+  sources     IngestionSource[]
+  events      Event[]
+  programs    Program[]
+  ads         AdvertisementUniversity[]
+  links       ManagedLink[]
+}
+
+model ArticleCategory {
+  id        String    @id @default(cuid())
+  name      String
+  slug      String    @unique
+  articles  Article[]
+  platformPosts PlatformPost[]
+}
+
+model Article {
+  id                    String            @id @default(cuid())
+  universityId          String
+  university            University        @relation(fields: [universityId], references: [id])
+  sourceId              String?
+  source                IngestionSource?  @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  originalArticleId     String?
+  sourceUrl             String?
+  title                 String
+  summary               String            @default("")
+  description           String            @default("")
+  content               String            @default("")
+  categoryId            String?
+  category              ArticleCategory?  @relation(fields: [categoryId], references: [id])
+  originalPublishedAt   DateTime?
+  publishedAt           DateTime?
+  discoveredAt          DateTime          @default(now())
+  sourceUpdatedAt       DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+  status                PublicationStatus @default(pending_review)
+  origin                OriginType        @default(manual)
+  visible               Boolean           @default(true)
+  deletedAt             DateTime?
+  fingerprint           String?
+  sourceSnapshot        Json?
+  editedFields          String[]          @default([])
+  media                 ArticleMedia[]
+  registrationLinks     ArticleRegistrationLink[]
+  edits                 ArticleEdit[]
+  ingestionLogs         IngestionLog[]
+  @@unique([sourceId, originalArticleId])
+  @@index([status, visible, deletedAt, publishedAt])
+  @@index([universityId, categoryId])
+}
+
+model ArticleMedia {
+  id            String    @id @default(cuid())
+  articleId     String
+  article       Article   @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  kind          MediaKind
+  url           String
+  attribution   String
+  usage         String    @default("external_reference_only")
+  sortOrder     Int       @default(0)
+  @@unique([articleId, url])
+}
+
+model ArticleRegistrationLink {
+  id        String  @id @default(cuid())
+  articleId String
+  article   Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  url       String
+  @@unique([articleId, url])
+}
+
+model Event {
+  id              String            @id @default(cuid())
+  title           String
+  description     String            @default("")
+  kind            EventKind         @default(event)
+  startsAt        DateTime
+  endsAt          DateTime?
+  applicationUrl  String?
+  universityId    String?
+  university      University?       @relation(fields: [universityId], references: [id])
+  status          PublicationStatus @default(pending_review)
+  visible         Boolean           @default(true)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  @@index([status, visible, startsAt])
+}
+
+model Program {
+  id              String            @id @default(cuid())
+  title           String
+  description     String            @default("")
+  startsAt        DateTime
+  endsAt          DateTime?
+  applicationUrl  String?
+  universityId    String?
+  university      University?       @relation(fields: [universityId], references: [id])
+  status          PublicationStatus @default(pending_review)
+  visible         Boolean           @default(true)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  @@index([status, visible, startsAt])
+}
+
+model AdvertisementPlacement {
+  id    String          @id
+  name  String
+  ads   Advertisement[]
+  assignments AdvertisementPlacementAssignment[]
+}
+
+model Advertisement {
+  id             String                    @id @default(cuid())
+  title          String
+  description    String                    @default("")
+  imageUrl       String?
+  destinationUrl String
+  buttonText     String                    @default("اكتشف المزيد")
+  global         Boolean                   @default(false)
+  placementId    String
+  placement      AdvertisementPlacement    @relation(fields: [placementId], references: [id])
+  priority       Int                       @default(0)
+  startsAt       DateTime?
+  endsAt         DateTime?
+  status         AdvertisementStatus       @default(paused)
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+  universities   AdvertisementUniversity[]
+  metrics        AdvertisementDailyMetric[]
+  placementAssignments AdvertisementPlacementAssignment[]
+  @@index([status, placementId, priority])
+}
+
+model AdvertisementUniversity {
+  advertisementId String
+  universityId    String
+  advertisement   Advertisement @relation(fields: [advertisementId], references: [id], onDelete: Cascade)
+  university      University    @relation(fields: [universityId], references: [id], onDelete: Cascade)
+  @@id([advertisementId, universityId])
+}
+
+model AdvertisementDailyMetric {
+  advertisementId String
+  day             DateTime      @db.Date
+  advertisement   Advertisement @relation(fields: [advertisementId], references: [id], onDelete: Cascade)
+  impressions     Int           @default(0)
+  clicks          Int           @default(0)
+  @@id([advertisementId, day])
+}
+
+model ManagedLink {
+  id             String     @id @default(cuid())
+  title          String
+  description    String     @default("")
+  destinationUrl String
+  imageUrl       String?
+  icon           String?
+  universityId   String?
+  university     University? @relation(fields: [universityId], references: [id])
+  category       String     @default("general")
+  kind           ManagedLinkKind @default(general)
+  displayOrder   Int        @default(0)
+  active         Boolean    @default(true)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  @@index([active, universityId, category])
+}
+
+model AdvertisementPlacementAssignment {
+  advertisementId String
+  placementId     String
+  advertisement   Advertisement @relation(fields: [advertisementId], references: [id], onDelete: Cascade)
+  placement       AdvertisementPlacement @relation(fields: [placementId], references: [id], onDelete: Restrict)
+  @@id([advertisementId, placementId])
+  @@index([placementId])
+}
+
+// Editorial eStudy24 content has no university/source relation, by design.
+model PlatformPost {
+  id              String @id @default(cuid())
+  slug            String @unique
+  type            PlatformContentType @default(platform_news)
+  title           String
+  summary         String @default("")
+  content         String @default("")
+  coverImageUrl   String?
+  categoryId      String?
+  category        ArticleCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  featured        Boolean @default(false)
+  featurePriority Int @default(0)
+  seoTitle        String?
+  seoDescription  String?
+  status          PublicationStatus @default(pending_review)
+  visible         Boolean @default(true)
+  publishedAt     DateTime?
+  deletedAt       DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  @@index([status, visible, deletedAt, type, publishedAt])
+  @@index([featured, featurePriority])
+}
+
+model SiteSettings {
+  id                       String @id @default("main")
+  visitorCounterEnabled    Boolean @default(true)
+  visitorCounterLabel      String @default("زيارات مجتمعنا الجامعي")
+  visitorBaseline          Int @default(0)
+  visitorBaselineVerified  Boolean @default(false)
+  visitorBaselineEvidence  String?
+  visitorBaselineAsOf      DateTime?
+  trackingStartedAt        DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+}
+
+model VisitorDaily {
+  day    DateTime @id @db.Date
+  visits Int @default(0)
+}
+
+model VisitDedup {
+  key       String @id
+  expiresAt DateTime
+  @@index([expiresAt])
+}
+
+model Administrator {
+  id           String       @id @default(cuid())
+  email        String       @unique
+  name         String
+  passwordHash String
+  role         AdminRole    @default(owner)
+  active       Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  sessions     AdminSession[]
+  audits       AuditLog[]
+  edits        ArticleEdit[]
+}
+
+model AdminSession {
+  id              String        @id @default(cuid())
+  tokenHash       String        @unique
+  administratorId String
+  administrator   Administrator @relation(fields: [administratorId], references: [id], onDelete: Cascade)
+  expiresAt       DateTime
+  createdAt       DateTime      @default(now())
+  @@index([expiresAt])
+}
+
+model IngestionSource {
+  id           String         @id @default(cuid())
+  key          String         @unique
+  name         String
+  url          String
+  universityId String
+  university   University     @relation(fields: [universityId], references: [id])
+  enabled      Boolean        @default(true)
+  articles     Article[]
+  logs         IngestionLog[]
+}
+
+model IngestionLog {
+  id           String           @id @default(cuid())
+  requestId    String
+  sourceId     String?
+  source       IngestionSource? @relation(fields: [sourceId], references: [id])
+  articleId    String?
+  article      Article?         @relation(fields: [articleId], references: [id], onDelete: SetNull)
+  originalId   String?
+  outcome      String
+  errorCode    String?
+  createdAt    DateTime         @default(now())
+  @@index([createdAt, outcome])
+  @@index([requestId])
+}
+
+model ArticleEdit {
+  id              String         @id @default(cuid())
+  articleId       String
+  article         Article        @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  administratorId String?
+  administrator   Administrator? @relation(fields: [administratorId], references: [id], onDelete: SetNull)
+  before          Json
+  after           Json
+  createdAt       DateTime       @default(now())
+}
+
+model AuditLog {
+  id              String         @id @default(cuid())
+  administratorId String?
+  administrator   Administrator? @relation(fields: [administratorId], references: [id], onDelete: SetNull)
+  action          String
+  entity          String
+  entityId        String?
+  details         Json?
+  createdAt       DateTime       @default(now())
+  @@index([createdAt])
+}
+
+model RateLimitBucket {
+  key       String   @id
+  count     Int      @default(1)
+  expiresAt DateTime
+  @@index([expiresAt])
+}
+
+model UploadedMedia {
+  id           String   @id @default(cuid())
+  filename     String   @unique
+  originalName String
+  mimeType     String
+  size         Int
+  createdAt    DateTime @default(now())
+}
