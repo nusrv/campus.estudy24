@@ -1,6 +1,6 @@
 # Plesk production deployment — campus.estudy24.com
 
-For the university/key/counter release, also apply [the current migration and explicit ten-university seed instructions](INTEGRATIONS.md). Hosting settings below stay the same.
+For the current content-automation release, apply [CONTENT-AUTOMATION.md](CONTENT-AUTOMATION.md) first. For the earlier university/key/counter release, also apply [the current migration and explicit ten-university seed instructions](INTEGRATIONS.md). Hosting settings below stay the same.
 
 This is the current deployment guide. Older phase reports describe historical standalone/container experiments and are not deployment instructions. No containers, standalone bundle, asset copying, SSH account provisioning, database reset, or production deployment automation is required.
 

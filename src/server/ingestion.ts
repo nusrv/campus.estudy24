@@ -3,15 +3,15 @@ import { Prisma } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { db } from "./db";
 import { failure, json } from "./http";
-import { clientKey, rateLimit } from "./rate-limit";
-import { HttpError, MAX_BATCH_SIZE, enforceApiKey, readJson } from "./security";
+import { HttpError, MAX_BATCH_SIZE, readJson } from "./security";
 import { ingestArticleSchema, type IngestArticle } from "./validation";
 import { fingerprint, incomingFields } from "./ingestion-policy";
-import { authenticateUniversityKey } from "./university-keys";
+import { ingestionAuthentication } from './ingestion-auth';
 import { requireUniversityScope } from "./integration-policy";
+import { newsPublicationDecision } from './publication-policy';
 type UniversityCredential = { keyId: string; universityId: string; universitySlug: string };
 
-export type IngestResult = { index: number; outcome: "created" | "updated" | "unchanged" | "rejected" | "failed"; article_id?: string; error?: { code: string; fields?: { path: string; message: string }[] } };
+export type IngestResult = { index: number; outcome: "created" | "updated" | "unchanged" | "rejected" | "failed"; article_id?: string; resource_id?: string; resource_type?: string; publication?: { status: string; decision: string }; error?: { code: string; fields?: { path: string; message: string }[] } };
 
 async function applyImport(input: IngestArticle, requestId: string, index: number, credential?: UniversityCredential): Promise<IngestResult> {
   for (let attempt = 0; attempt < 4; attempt++) {
@@ -30,32 +30,36 @@ async function applyImport(input: IngestArticle, requestId: string, index: numbe
         if (new URL(source.url).hostname !== new URL(input.source_url).hostname) throw new HttpError(422, "SOURCE_HOST_MISMATCH", "Article URL must belong to the configured source host.");
         const digest = fingerprint(input);
         const existing = await tx.article.findUnique({ where: { sourceId_originalArticleId: { sourceId: source.id, originalArticleId: input.source_id } } });
+        const decision = newsPublicationDecision(source.university.autoPublishNews, input, existing);
+        const holdPublishedUpdate = decision.review && existing?.status === 'published' && existing.publicationLocked;
+        const publicationData = decision.publish ? { status: 'published' as const, publishedAt: existing?.publishedAt || new Date(), autoPublishedAt: new Date() } : decision.review && existing?.status === 'published' && !existing.publicationLocked ? { status: 'pending_review' as const } : {};
         let articleId = existing?.id;
         let outcome: IngestResult["outcome"] = "unchanged";
-        if (!existing || existing.fingerprint !== digest) {
+        if (!existing || existing.fingerprint !== digest || Object.keys(publicationData).length) {
           const category = await tx.articleCategory.upsert({ where: { slug: input.category }, create: { slug: input.category, name: input.category }, update: {} });
-          const fields = incomingFields(input, category.id, existing?.editedFields || []);
+          const fields = holdPublishedUpdate ? {} : incomingFields(input, category.id, existing?.editedFields || []);
           if (existing) {
             // Status, visibility, deletedAt, publishedAt and universityId are deliberately absent.
-            await tx.article.update({ where: { id: existing.id }, data: { ...fields, fingerprint: digest, sourceSnapshot: input as Prisma.InputJsonValue, sourceUpdatedAt: new Date() } });
+            await tx.article.update({ where: { id: existing.id }, data: { ...fields, ...publicationData, fingerprint: digest, sourceSnapshot: input as Prisma.InputJsonValue, sourceUpdatedAt: new Date() } });
             outcome = "updated";
           } else {
-            const created = await tx.article.create({ data: { universityId: source.universityId, sourceId: source.id, originalArticleId: input.source_id, sourceUrl: input.source_url, title: input.title, summary: input.summary, description: input.description, content: input.content_text, originalPublishedAt: input.published_at ? new Date(input.published_at) : null, categoryId: category.id, origin: "imported", status: "pending_review", fingerprint: digest, sourceSnapshot: input as Prisma.InputJsonValue } });
+            const created = await tx.article.create({ data: { universityId: source.universityId, sourceId: source.id, originalArticleId: input.source_id, sourceUrl: input.source_url, title: input.title, summary: input.summary, description: input.description, content: input.content_text, originalPublishedAt: input.published_at ? new Date(input.published_at) : null, categoryId: category.id, origin: "imported", status: "pending_review", ...publicationData, fingerprint: digest, sourceSnapshot: input as Prisma.InputJsonValue } });
             articleId = created.id;
             outcome = "created";
           }
-          if (!(existing?.editedFields || []).includes("media")) {
+          if (!holdPublishedUpdate && !(existing?.editedFields || []).includes("media")) {
             await tx.articleMedia.deleteMany({ where: { articleId } });
             const media = [...input.image_urls.map(url => ({ url, kind: "image" as const })), ...input.pdf_urls.map(url => ({ url, kind: "pdf" as const }))];
             if (media.length) await tx.articleMedia.createMany({ data: media.map((item, sortOrder) => ({ ...item, sortOrder, articleId: articleId!, attribution: input.source_url, usage: "external_reference_only" })), skipDuplicates: true });
           }
-          if (!(existing?.editedFields || []).includes("registrationLinks")) {
+          if (!holdPublishedUpdate && !(existing?.editedFields || []).includes("registrationLinks")) {
             await tx.articleRegistrationLink.deleteMany({ where: { articleId } });
             if (input.registration_links.length) await tx.articleRegistrationLink.createMany({ data: input.registration_links.map(url => ({ articleId: articleId!, url })), skipDuplicates: true });
           }
         }
-        await tx.ingestionLog.create({ data: { requestId, sourceId: source.id, articleId, originalId: input.source_id, outcome } });
-        return { index, outcome, article_id: articleId };
+        const publication = { status: publicationData.status || existing?.status || 'pending_review', decision: decision.reason };
+        await tx.ingestionLog.create({ data: { requestId, sourceId: source.id, articleId, originalId: input.source_id, outcome, resourceType: 'articles', resourceId: articleId, publicationDecision: decision.reason } });
+        return { index, outcome, article_id: articleId, resource_type: 'articles', resource_id: articleId, publication };
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 15000 });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && ["P2002", "P2034"].includes(error.code) && attempt < 3) continue;
@@ -75,7 +79,7 @@ export async function ingestRecord(raw: unknown, requestId: string, index: numbe
   catch (error) {
     const rejected = error instanceof HttpError;
     const code = rejected ? error.code : "INGESTION_FAILED";
-    await db.ingestionLog.create({ data: { requestId, originalId: parsed.data.source_id, outcome: rejected ? "rejected" : "failed", errorCode: code } });
+    await db.ingestionLog.create({ data: { requestId, originalId: parsed.data.source_id, outcome: rejected ? "rejected" : "failed", errorCode: code, resourceType: 'articles', publicationDecision: 'ingestion_failed' } });
     return { index, outcome: rejected ? "rejected" : "failed", error: { code } };
   }
 }
@@ -84,15 +88,8 @@ export async function handleIngestion(request: Request, batch: boolean) {
   const requestId = randomUUID();
   let authenticated = false;
   try {
-    await rateLimit('ingest-auth', clientKey(request.headers), 120, 60);
-    const bearer = request.headers.get('authorization')?.replace(/^Bearer /, '') || '';
-    let credential: UniversityCredential | undefined;
-    if (request.headers.get('authorization')?.startsWith('Bearer campus_uak_')) credential = await authenticateUniversityKey(db, bearer);
-    else if ((process.env.INGEST_API_KEY || '').length >= 32) enforceApiKey(request.headers, process.env.INGEST_API_KEY!);
-    else throw new HttpError(401, 'UNAUTHORIZED', 'مفتاح API صالح مطلوب للاستيراد.');
+    const credential = await ingestionAuthentication(request);
     authenticated = true;
-    await rateLimit("ingest", clientKey(request.headers), 60, 60);
-    if (credential) await rateLimit('ingest-key', credential.keyId, 60, 60);
     const body = await readJson(request);
     let records: unknown[];
     if (batch) {

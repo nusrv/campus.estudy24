@@ -30,7 +30,7 @@ export async function homepageContent() {
   ]);
   return { featured, news, learning };
 }
-export const universityPublicSelect = { id: true, name: true, slug: true, description: true, logoUrl: true, websiteUrl: true, city: true, region: true } satisfies Prisma.UniversitySelect;
+export const universityPublicSelect = { id: true, name: true, slug: true, description: true, logoUrl: true, websiteUrl: true, telegramCommunityUrl: true, city: true, region: true } satisfies Prisma.UniversitySelect;
 export async function directoryPage(search: URLSearchParams) {
   const query = search.get("search");
   const region = search.get("region");
@@ -66,7 +66,7 @@ export async function universitySections(universitySlug: string, query: PublicQu
   const calendarKind = typeof query.kind === "string" ? eventKind.safeParse(query.kind) : null;
   const calendarWhere: Prisma.EventWhereInput = { ...base, kind: calendarKind?.success && calendarKind.data !== "event" ? calendarKind.data : { in: ["academic_date", "registration", "examination"] }, ...(dates && { startsAt: dates }) };
   const chosenKind = typeof query.kind === "string" ? linkKind.safeParse(query.kind) : null;
-  const linksWhere: Prisma.ManagedLinkWhereInput = { active: true, ...universityContentScope(universitySlug), ...titleSearch, ...(section === "schedules" ? { kind: "timetable" } : section === "calendar" ? { kind: "academic_calendar" } : section === "services" ? { kind: { in: ["student_service", "admission"] } } : section === "links" && chosenKind?.success ? { kind: chosenKind.data } : {}) };
+  const linksWhere: Prisma.ManagedLinkWhereInput = { active: true, status: "published", ...universityContentScope(universitySlug), ...titleSearch, ...(section === "schedules" ? { kind: "timetable" } : section === "calendar" ? { kind: "academic_calendar" } : section === "services" ? { kind: { in: ["student_service", "admission"] } } : section === "links" && chosenKind?.success ? { kind: chosenKind.data } : {}) };
   const args = { take: all ? 4 : 12, skip: all ? 0 : (page - 1) * 12 };
   const [news, programs, events, calendar, links, categories, total] = await Promise.all([
     all || section === "news" ? db.article.findMany({ where: newsWhere, select: newsSelect, ...args, orderBy: [{ publishedAt: "desc" }, { id: "desc" }] }) : [],

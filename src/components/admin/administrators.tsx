@@ -23,7 +23,7 @@ export function Administrators({ initial, actorId }: { initial: Administrator[];
       if (!response.ok) { setMessage('تعذّر تنفيذ العملية. تحقق من البيانات والصلاحيات. لا يمكن تعطيل آخر مالك نشط.'); return false; }
       const result = await response.json();
       if (result.token) setResetCode(result.token);
-      setMessage(result.token ? 'رمز صالح لمدة ٣٠ دقيقة ولمرة واحدة. سلّمه لصاحب الحساب عبر قناة آمنة مع رابط صفحة إعادة التعيين.' : 'تم حفظ التغييرات. قد يلزم تسجيل الدخول مجددًا للحساب المعدّل.');
+      setMessage(result.token ? 'رمز صالح لمدة 30 دقيقة ولمرة واحدة. سلّمه لصاحب الحساب عبر قناة آمنة مع رابط صفحة إعادة التعيين.' : 'تم حفظ التغييرات. قد يلزم تسجيل الدخول مجددًا للحساب المعدّل.');
       // Keep a self-reset code visible after its issuance revokes this session.
       if (!result.token) router.refresh();
       return true;
@@ -43,7 +43,7 @@ export function Administrators({ initial, actorId }: { initial: Administrator[];
       <label className="text-sm">الاسم<Input name="name" required maxLength={200} defaultValue={editing?.name} autoComplete="off" className="mt-2" /></label>
       <label className="text-sm">البريد الإلكتروني<Input name="email" type="email" required maxLength={254} defaultValue={editing?.email} autoComplete="off" dir="ltr" className="mt-2" /></label>
       {editing ? <label className="flex items-center gap-2 text-sm"><input name="active" type="checkbox" defaultChecked={editing.active} />حساب نشط</label> : <>
-        <label className="text-sm">كلمة المرور (٨ أحرف على الأقل)<Input name="password" type="password" required minLength={PASSWORD_MIN_LENGTH} maxLength={PASSWORD_MAX_LENGTH} autoComplete="new-password" className="mt-2" /></label>
+        <label className="text-sm">كلمة المرور (8 أحرف على الأقل)<Input name="password" type="password" required minLength={PASSWORD_MIN_LENGTH} maxLength={PASSWORD_MAX_LENGTH} autoComplete="new-password" className="mt-2" /></label>
         <label className="text-sm">تأكيد كلمة المرور<Input name="confirmation" type="password" required minLength={PASSWORD_MIN_LENGTH} maxLength={PASSWORD_MAX_LENGTH} autoComplete="new-password" className="mt-2" /></label>
       </>}
       <div className="flex gap-3 sm:col-span-2"><Button disabled={busy}>{editing ? 'حفظ التعديل' : 'إضافة محرّر'}</Button>{editing && <Button type="button" variant="outline" onClick={() => setEditing(null)}>إلغاء</Button>}</div>

@@ -5,6 +5,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
 import { createServer } from 'node:net';
 import { seedCampus } from '../../prisma/seed-campus.ts';
+import { seedUniversityLogos } from '../../prisma/seed-logos.ts';
 import { SAUDI_UNIVERSITIES, demoAdId } from '../../prisma/campus-seed-data.ts';
 import { ADMIN_PATH, hashPassword, csrfToken, tokenDigest } from '../../src/server/security.ts';
 import { manageUniversityKey, authenticateUniversityKey } from '../../src/server/university-keys.ts';
@@ -55,6 +56,15 @@ test('PostgreSQL + HTTP: seed, advertisements, counter, private API docs and sco
       assert.equal(preservedAd.title, 'إعلان تجريبي — تحرير محفوظ'); assert.equal(preservedAd.status, 'paused');
       await db.advertisement.update({ where: { id: demoAdId('uqu') }, data: { status: 'active' } });
       assert.equal(await db.article.count(), articlesBefore);
+    });
+    await t.test('verified logo seed fills missing assets once and preserves manual uploads and disabled publication policies', async () => {
+      const first = await seedUniversityLogos(db); assert.equal(first.filled, 8);
+      assert.equal((await seedUniversityLogos(db)).filled, 0);
+      const ksu = await db.university.findUniqueOrThrow({ where: { slug: 'ksu' } });
+      await db.university.update({ where: { id: ksu.id }, data: { logoUrl: '/media/owner-upload.png' } });
+      await seedUniversityLogos(db);
+      assert.equal((await db.university.findUniqueOrThrow({ where: { id: ksu.id } })).logoUrl, '/media/owner-upload.png');
+      assert.equal(await db.university.count({ where: { id: { in: uniIds }, autoPublishNews: true } }), 0);
     });
     await t.test('all ten university pages and advertisements are public; demos never appear on homepage', async () => {
       for (const slug of slugs) {

@@ -1,0 +1,6 @@
+Official university marks, used solely to identify the respective universities.
+All trademark/copyright rights remain with their respective universities.
+No affiliation, endorsement or unrestricted reuse licence is claimed.
+Exact university-owned source pages and original assets, checksums and review date:
+https://github.com/nusrv/campus.estudy24/blob/main/docs/university-logos.json
+The white Umm Al-Qura mark must appear on a contrasting background.

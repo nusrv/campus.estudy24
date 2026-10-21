@@ -1,0 +1,98 @@
+[
+  {
+    "slug": "imamu",
+    "sourcePage": "https://imamu.edu.sa/ar",
+    "assetUrl": "https://imamu.edu.sa/assets/image/logoheader.webp",
+    "localUrl": "/university-logos/imamu.png",
+    "width": 280,
+    "height": 75,
+    "background": "light",
+    "sha256": "ff5cb77301eaa69f182567e05afc4962e05c3f1ed59c91279d62b2eb89d03d8b",
+    "usage": "University-owned mark; identification only, rights retained by the university; no affiliation or unrestricted reuse license implied.",
+    "reviewedAt": "2026-10-21"
+  },
+  {
+    "slug": "jazanu",
+    "sourcePage": "https://platform.jazanu.edu.sa",
+    "assetUrl": "https://axdrjgksckvd.compat.objectstorage.me-riyadh-1.oraclecloud.com/Numo-Full/static_options/JUtDW0xvYcIggA9VtYzIUt1tf4fZ1y4ef940Eenw.svg",
+    "localUrl": "/university-logos/jazanu.png",
+    "width": 256,
+    "height": 320,
+    "background": "light",
+    "sha256": "678d5828b7563852bd0fc6c7e20c852f56e466b7e9ff34eef9080f20e7ac363e",
+    "usage": "University-owned mark; identification only, rights retained by the university; no affiliation or unrestricted reuse license implied.",
+    "reviewedAt": "2026-10-21"
+  },
+  {
+    "slug": "kau",
+    "sourcePage": "https://www.kau.edu.sa/ar",
+    "assetUrl": "https://www.kau.edu.sa/images/logo-dark.png",
+    "localUrl": "/university-logos/kau.png",
+    "width": 800,
+    "height": 191,
+    "background": "light",
+    "sha256": "969c790e9694e989d6139e12db3f36441c6429cf468a9ff8b00dd361dfe292d5",
+    "usage": "University-owned mark; identification only, rights retained by the university; no affiliation or unrestricted reuse license implied.",
+    "reviewedAt": "2026-10-21"
+  },
+  {
+    "slug": "ksu",
+    "sourcePage": "https://ksu.edu.sa",
+    "assetUrl": "https://ksu.edu.sa/ksu_logo.png",
+    "localUrl": "/university-logos/ksu.png",
+    "width": 800,
+    "height": 309,
+    "background": "light",
+    "sha256": "3b84e6b559b7e9fc3bdda5198fefa1d780c64e54077900e98b926cfc703ba79d",
+    "usage": "University-owned mark; identification only, rights retained by the university; no affiliation or unrestricted reuse license implied.",
+    "reviewedAt": "2026-10-21"
+  },
+  {
+    "slug": "pnu",
+    "sourcePage": "https://pnu.edu.sa/ar/Pages/Home.aspx",
+    "assetUrl": "https://pnu.edu.sa/Style%20Library/DGA/public/images/pnu-logo-ar-h-2x.png",
+    "localUrl": "/university-logos/pnu.png",
+    "width": 280,
+    "height": 100,
+    "background": "light",
+    "sha256": "a043be8a64afb2384d7a511d72c8bfc25c7c99c82aa421a3d9314ef816a03967",
+    "usage": "University-owned mark; identification only, rights retained by the university; no affiliation or unrestricted reuse license implied.",
+    "reviewedAt": "2026-10-21"
+  },
+  {
+    "slug": "qu",
+    "sourcePage": "https://www.qu.edu.sa",
+    "assetUrl": "https://www.qu.edu.sa/wp-content/uploads/2025/04/qu-logo-v4.webp",
+    "localUrl": "/university-logos/qu.png",
+    "width": 300,
+    "height": 89,
+    "background": "light",
+    "sha256": "648fcb494b0bcdfe18427bb20757c5c45e0e3520da07aa2348aa5c6a9b69c2db",
+    "usage": "University-owned mark; identification only, rights retained by the university; no affiliation or unrestricted reuse license implied.",
+    "reviewedAt": "2026-10-21"
+  },
+  {
+    "slug": "taibah",
+    "sourcePage": "https://www.taibahu.edu.sa",
+    "assetUrl": "https://www.taibahu.edu.sa/themes/custom/taiu_saud/logo.svg",
+    "localUrl": "/university-logos/taibah.png",
+    "width": 376,
+    "height": 88,
+    "background": "light",
+    "sha256": "d364f39629cd51a61dbc29cb88736cb515c783a54a020c2ded523a5329d9b622",
+    "usage": "University-owned mark; identification only, rights retained by the university; no affiliation or unrestricted reuse license implied.",
+    "reviewedAt": "2026-10-21"
+  },
+  {
+    "slug": "uqu",
+    "sourcePage": "https://uqu.edu.sa",
+    "assetUrl": "https://uqu.edu.sa/assets/images/logo-white.svg",
+    "localUrl": "/university-logos/uqu.png",
+    "width": 213,
+    "height": 320,
+    "background": "dark",
+    "sha256": "1fec5961869c8e2ddeef14b253975450a82cacf7dfd8a2b6bcd397a838cbe9c4",
+    "usage": "University-owned mark; identification only, rights retained by the university; no affiliation or unrestricted reuse license implied.",
+    "reviewedAt": "2026-10-21"
+  }
+]

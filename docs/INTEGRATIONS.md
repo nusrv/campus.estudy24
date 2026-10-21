@@ -1,5 +1,7 @@
 # Universities, advertisements, visitor counter and n8n
 
+Historical instructions for the preceding release. For the current publication policy, structured endpoints, logos and Telegram configuration, follow [CONTENT-AUTOMATION.md](CONTENT-AUTOMATION.md).
+
 This release extends the existing direct Plesk deployment; Node 22, root `server.js`, the current public design, private dashboard, owner/editor permissions and PostgreSQL content remain in use. No container, standalone output, scheduled Next.js RSS collector, public registration, or automatic publication is added.
 
 ## Exact Plesk release steps

@@ -17,7 +17,7 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
       db.university.findFirst({ where: { enabled: true, logoUrl: url }, select: { id: true } }),
       db.article.findFirst({ where: { ...publishedArticleWhere, media: { some: { url } } }, select: { id: true } }),
       db.advertisement.findFirst({ where: { ...activeAdsWhere(), imageUrl: url, OR: [{ global: true }, { universities: { some: { university: { enabled: true } } } }] }, select: { id: true } }),
-      db.managedLink.findFirst({ where: { active: true, imageUrl: url, OR: [{ universityId: null }, { university: { enabled: true } }] }, select: { id: true } }),
+      db.managedLink.findFirst({ where: { active: true, status: "published", imageUrl: url, OR: [{ universityId: null }, { university: { enabled: true } }] }, select: { id: true } }),
       db.platformPost.findFirst({ where: { ...platformVisibility, coverImageUrl: url }, select: { id: true } }),
     ]);
     // Admin cookie is intentionally scoped to the private path, so unpublished files use the private preview route.

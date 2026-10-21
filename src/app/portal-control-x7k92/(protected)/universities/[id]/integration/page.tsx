@@ -7,7 +7,7 @@ import { UniversityIntegration } from '@/components/admin/integration';
 export default async function IntegrationPage({ params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAdminPage();
   const { id } = await params;
-  const university = await db.university.findUnique({ where: { id }, select: { id: true, slug: true, name: true, websiteUrl: true } });
+  const university = await db.university.findUnique({ where: { id }, select: { id: true, slug: true, name: true, websiteUrl: true, autoPublishNews: true } });
   if (!university) notFound();
   const keys = auth.administrator.role === 'owner' ? await db.universityApiKey.findMany({ where: { universityId: id }, select: apiKeySelect, orderBy: { createdAt: 'desc' }, take: 20 }) : [];
   return <UniversityIntegration university={university} initialKeys={JSON.parse(JSON.stringify(keys))} origin={appUrl()} />;

@@ -1,0 +1,113 @@
+{
+  "name": "Campus — structured programs (configure verified source)",
+  "active": false,
+  "nodes": [
+    {
+      "id": "manual",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "source",
+      "name": "Verified Structured Source — replace placeholders",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        240,
+        0
+      ],
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "{\n  \"university_slug\": \"uqu\",\n  \"source_key\": \"uqu-rss\",\n  \"source_id\": \"REPLACE_WITH_ORIGINAL_RESOURCE_ID\",\n  \"source_url\": \"https://uqu.edu.sa\",\n  \"title\": \"REPLACE_WITH_VERIFIED_SOURCE_TITLE\",\n  \"description\": \"\",\n  \"starts_at\": \"REPLACE_WITH_VERIFIED_ISO_DATE\",\n  \"ends_at\": null,\n  \"application_url\": null\n}",
+        "options": {}
+      }
+    },
+    {
+      "id": "normalize",
+      "name": "Validate Explicit Fields",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        0
+      ],
+      "parameters": {
+        "jsCode": "return $input.all().map(({json:r})=>{ if (/REPLACE_WITH_/.test(JSON.stringify(r))) throw new Error('Configure verified source records first; never infer services or dates from articles.'); if (!r.university_slug || !r.source_id || !r.source_url || !r.title) throw new Error('Explicit source identity is required.'); if (!r.starts_at || Number.isNaN(Date.parse(r.starts_at))) throw new Error('Verified starts_at is required; do not use publication date.'); return {json:{...r,source_id:String(r.source_id)}}; });"
+      }
+    },
+    {
+      "id": "http",
+      "name": "Authenticated Campus Request",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://campus.estudy24.com/api/ingest/programs",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "CONFIGURE_LOCALLY",
+          "name": "Campus university Authorization Bearer — configure locally"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Verified Structured Source — replace placeholders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verified Structured Source — replace placeholders": {
+      "main": [
+        [
+          {
+            "node": "Validate Explicit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Explicit Fields": {
+      "main": [
+        [
+          {
+            "node": "Authenticated Campus Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "tags": []
+}

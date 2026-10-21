@@ -13,6 +13,17 @@ export function resourceName(value: string): Resource {
 }
 function snapshot(value: unknown): Prisma.InputJsonValue { return JSON.parse(JSON.stringify(value)); }
 const dateOrNull = (value?: string | null) => value ? new Date(value) : null;
+async function protectSyncedFields(tx: Prisma.TransactionClient, resource: string, recordId: string | undefined, data: Record<string, unknown>) {
+  if (!recordId) return;
+  const types = resource === 'events' ? ['events', 'calendar'] : [resource];
+  const sync = await tx.contentSync.findFirst({ where: { recordId, contentType: { in: types } } });
+  if (!sync) return;
+  const before = resource === 'links' ? await tx.managedLink.findUniqueOrThrow({ where: { id: recordId } }) : resource === 'programs' ? await tx.program.findUniqueOrThrow({ where: { id: recordId } }) : await tx.event.findUniqueOrThrow({ where: { id: recordId } });
+  if ('universityId' in data && data.universityId !== before.universityId) throw new HttpError(422, 'IMMUTABLE_SOURCE', 'لا يمكن نقل المحتوى المستورد إلى جامعة أخرى.');
+  const old = before as unknown as Record<string, unknown>;
+  const edited = Object.keys(data).filter(field => JSON.stringify(old[field]) !== JSON.stringify(data[field]));
+  await tx.contentSync.update({ where: { id: sync.id }, data: { editedFields: [...new Set([...sync.editedFields, ...edited])] } });
+}
 
 export async function adminList(resource: Resource, search: URLSearchParams) {
   const p = pagination(search);
@@ -93,7 +104,7 @@ export async function saveResource(resource: Resource, raw: unknown, administrat
         const incoming = { ...clean, ...(originalPublishedAt !== undefined && { originalPublishedAt: dateOrNull(originalPublishedAt) }), ...(imageUrls !== undefined || pdfUrls !== undefined ? { media: [...(imageUrls || old.media.filter(m => m.kind === "image").map(m => m.url)), ...(pdfUrls || old.media.filter(m => m.kind === "pdf").map(m => m.url))].sort() } : {}), ...(registrationLinks !== undefined && { registrationLinks: [...registrationLinks].sort() }) };
         const before = { ...old, media: old.media.map(m => m.url).sort(), registrationLinks: old.registrationLinks.map(m => m.url).sort() };
         const { media: _media, registrationLinks: _registration, ...scalar } = incoming;
-        item = await tx.article.update({ where: { id: recordId }, data: { ...scalar, editedFields: changedEditorialFields(before, incoming, old.editedFields), ...(clean.status === "published" && old.status !== "published" && { publishedAt: new Date() }), ...(action === "soft_delete" && { deletedAt: new Date() }), ...(action === "restore" && { deletedAt: null }) } });
+        item = await tx.article.update({ where: { id: recordId }, data: { ...scalar, publicationLocked: true, editedFields: changedEditorialFields(before, incoming, old.editedFields), ...(clean.status === "published" && old.status !== "published" && { publishedAt: new Date() }), ...(action === "soft_delete" && { deletedAt: new Date() }), ...(action === "restore" && { deletedAt: null }) } });
         if (imageUrls !== undefined || pdfUrls !== undefined) {
           await tx.articleMedia.deleteMany({ where: { articleId: recordId } });
           const images = imageUrls || old.media.filter(m => m.kind === "image").map(m => m.url);
@@ -126,20 +137,23 @@ export async function saveResource(resource: Resource, raw: unknown, administrat
       if (!data.global) await tx.advertisementUniversity.createMany({ data: [...new Set(universityIds)].map(universityId => ({ universityId, advertisementId: item.id })) });
     } else if (resource === "links") {
       const data = linkSchema.parse(raw);
+      await protectSyncedFields(tx, resource, recordId, data);
       item = recordId ? await tx.managedLink.update({ where: { id: recordId }, data }) : await tx.managedLink.create({ data });
     } else if (resource === "events") {
       const parsed = eventSchema.parse(raw);
       const data = { ...parsed, startsAt: new Date(parsed.startsAt), endsAt: dateOrNull(parsed.endsAt) };
+      await protectSyncedFields(tx, resource, recordId, data);
       item = recordId ? await tx.event.update({ where: { id: recordId }, data }) : await tx.event.create({ data });
     } else if (resource === "programs") {
       const parsed = programSchema.parse(raw);
       const data = { ...parsed, startsAt: new Date(parsed.startsAt), endsAt: dateOrNull(parsed.endsAt) };
+      await protectSyncedFields(tx, resource, recordId, data);
       item = recordId ? await tx.program.update({ where: { id: recordId }, data }) : await tx.program.create({ data });
     } else if (resource === "sources") {
       const data = sourceSchema.parse(raw);
       if (recordId) {
-        const old = await tx.ingestionSource.findUnique({ where: { id: recordId }, include: { _count: { select: { articles: true } } } });
-        if (old && old._count.articles && (old.key !== data.key || old.universityId !== data.universityId)) throw new HttpError(409, "SOURCE_IN_USE", "Source identity cannot change after ingestion.");
+        const old = await tx.ingestionSource.findUnique({ where: { id: recordId }, include: { _count: { select: { articles: true, contentSyncs: true } } } });
+        if (old && (old._count.articles || old._count.contentSyncs) && (old.key !== data.key || old.universityId !== data.universityId)) throw new HttpError(409, "SOURCE_IN_USE", "Source identity cannot change after ingestion.");
       }
       item = recordId ? await tx.ingestionSource.update({ where: { id: recordId }, data }) : await tx.ingestionSource.create({ data });
     } else if (resource === "categories") {
@@ -154,6 +168,7 @@ export async function saveResource(resource: Resource, raw: unknown, administrat
 export async function deleteResource(resource: Resource, id: string, administratorId: string) {
   if (resource === "articles") return saveResource(resource, { action: "soft_delete" }, administratorId, id);
   return db.$transaction(async tx => {
+    if (['links', 'events', 'programs'].includes(resource)) await tx.contentSync.updateMany({ where: { recordId: id, contentType: { in: resource === 'events' ? ['events', 'calendar'] : [resource] } }, data: { deletedAt: new Date() } });
     switch (resource) {
       case "platform_posts": await tx.platformPost.update({ where: { id }, data: { deletedAt: new Date() } }); break;
       case "ads": await tx.advertisement.delete({ where: { id } }); break;

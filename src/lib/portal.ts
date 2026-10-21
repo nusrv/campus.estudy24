@@ -1,3 +1,5 @@
+
+import { formatDate } from "./format.ts";
 export const platformTypes = [
   { value: "platform_news", label: "أخبار eStudy24" },
   { value: "blog", label: "المدوّنة" },
@@ -11,7 +13,7 @@ export const linkKinds = [
   { value: "learning_resource", label: "مصادر تعليمية" },
 ] as const;
 export function platformTypeLabel(type: string) { return platformTypes.find(t => t.value === type)?.label || "محتوى eStudy24"; }
-export function arabicDate(value: Date | string | null) { return value ? new Date(value).toLocaleDateString("ar-SA", { calendar: "gregory", timeZone: "Asia/Riyadh", year: "numeric", month: "long", day: "numeric" }) : ""; }
+export function arabicDate(value: Date | string | null) { return value ? formatDate(new Date(value), { calendar: "gregory", timeZone: "Asia/Riyadh", year: "numeric", month: "long", day: "numeric" }) : ""; }
 export function dateRange(from?: string, to?: string) {
   const iso = (value: string, end: boolean) => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;

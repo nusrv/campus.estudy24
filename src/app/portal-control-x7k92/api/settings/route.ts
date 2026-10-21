@@ -3,7 +3,7 @@ import { db } from "@/server/db";
 import { failure, json } from "@/server/http";
 import { readJson } from "@/server/security";
 import { settingsSchema } from "@/server/validation";
-const settingsSelect = { visitorStartingValue: true, visitorCounterEnabled: true, visitorCounterLabel: true } as const;
+const settingsSelect = { visitorStartingValue: true, visitorCounterEnabled: true, visitorCounterLabel: true, telegramSupportUrl: true } as const;
 
 export async function GET(request: Request) {
   try { await requireAdmin(request, ["owner"]); return json(await db.siteSettings.findUnique({ where: { id: "main" }, select: settingsSelect })); } catch (error) { return failure(error); }

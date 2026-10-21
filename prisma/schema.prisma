@@ -70,6 +70,8 @@ model University {
   websiteUrl  String?
   logoUrl     String?
   enabled     Boolean  @default(true)
+  autoPublishNews Boolean @default(false)
+  telegramCommunityUrl String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   articles    Article[]
@@ -115,6 +117,8 @@ model Article {
   fingerprint           String?
   sourceSnapshot        Json?
   editedFields          String[]          @default([])
+  publicationLocked     Boolean           @default(false)
+  autoPublishedAt       DateTime?
   media                 ArticleMedia[]
   registrationLinks     ArticleRegistrationLink[]
   edits                 ArticleEdit[]
@@ -148,6 +152,7 @@ model Event {
   id              String            @id @default(cuid())
   title           String
   description     String            @default("")
+  sourceUrl       String?
   kind            EventKind         @default(event)
   startsAt        DateTime
   endsAt          DateTime?
@@ -165,6 +170,7 @@ model Program {
   id              String            @id @default(cuid())
   title           String
   description     String            @default("")
+  sourceUrl       String?
   startsAt        DateTime
   endsAt          DateTime?
   applicationUrl  String?
@@ -227,6 +233,8 @@ model ManagedLink {
   id             String     @id @default(cuid())
   title          String
   description    String     @default("")
+  sourceUrl      String?
+  status         PublicationStatus @default(published)
   destinationUrl String
   imageUrl       String?
   icon           String?
@@ -277,6 +285,7 @@ model PlatformPost {
 
 model SiteSettings {
   id                       String @id @default("main")
+  telegramSupportUrl       String?
   visitorCounterEnabled    Boolean @default(true)
   visitorCounterLabel      String @default("زيارات مجتمعنا الجامعي")
   visitorBaseline          Int @default(0)
@@ -359,6 +368,25 @@ model IngestionSource {
   enabled      Boolean        @default(true)
   articles     Article[]
   logs         IngestionLog[]
+  contentSyncs ContentSync[]
+}
+
+// Provenance and protected fields for imports into existing non-news models.
+// recordId deliberately survives deletion of the target record as an import tombstone.
+model ContentSync {
+  id String @id @default(cuid())
+  sourceId String
+  source IngestionSource @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  contentType String
+  originalId String
+  recordId String
+  fingerprint String
+  sourceSnapshot Json
+  editedFields String[] @default([])
+  deletedAt DateTime?
+  updatedAt DateTime @updatedAt
+  @@unique([sourceId, contentType, originalId])
+  @@unique([contentType, recordId])
 }
 
 model IngestionLog {
@@ -371,6 +399,9 @@ model IngestionLog {
   originalId   String?
   outcome      String
   errorCode    String?
+  resourceType String?
+  resourceId String?
+  publicationDecision String?
   createdAt    DateTime         @default(now())
   @@index([createdAt, outcome])
   @@index([requestId])
