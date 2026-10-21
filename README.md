@@ -1,5 +1,7 @@
 # eStudy24 Campus
 
+University ambassadors: [roles, university isolation, Owner workflow and Plesk migration](docs/AMBASSADORS.md).
+
 Bulk news deletion: [permissions, safeguards, verification and Plesk update](docs/BULK-NEWS.md).
 
 University news categories: [approved taxonomy, safe seed and Plesk release](docs/NEWS-CATEGORIES.md).

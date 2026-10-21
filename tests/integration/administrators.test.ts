@@ -72,7 +72,7 @@ test('PostgreSQL + HTTP: protected bootstrap, concurrent setup, administrator pe
       const input = { email: editorEmail, name: 'Editor', password, confirmation: password };
       assert.equal((await post(`${ADMIN_PATH}/api/administrators`, input)).status, 401);
       assert.equal((await post(`${ADMIN_PATH}/api/administrators`, input, { cookie: auth.cookie })).status, 403);
-      assert.equal((await post(`${ADMIN_PATH}/api/administrators`, { ...input, role: 'owner' }, auth)).status, 422);
+      assert.equal((await post(`${ADMIN_PATH}/api/administrators`, { ...input, role: 'owner', universityId: 'forged' }, auth)).status, 422);
       const response = await post(`${ADMIN_PATH}/api/administrators`, input, auth);
       assert.equal(response.status, 201);
       const editor = await response.json(); editorId = editor.id; ids.push(editorId);

@@ -1,4 +1,5 @@
 
+import { AmbassadorOverview } from "@/components/admin/ambassador-overview";
 import { formatNumber, formatDateTime } from "../../../lib/format.ts";
 import { requireAdminPage } from "@/server/auth";
 import { db } from "@/server/db";
@@ -9,7 +10,8 @@ import Link from "next/link";
 import { ADMIN_PATH } from "@/server/security";
 import { statuses } from "@/components/admin/config";
 export default async function OverviewPage() {
-  await requireAdminPage();
+  const auth = await requireAdminPage();
+  if (auth.administrator.role === "ambassador") return <AmbassadorOverview />;
   const [universities, imported, published, pending, ads, recent, logs] = await Promise.all([
     db.university.count(), db.article.count({ where: { origin: "imported", deletedAt: null } }), db.article.count({ where: { status: "published", visible: true, deletedAt: null } }), db.article.count({ where: { status: "pending_review", deletedAt: null } }), db.advertisement.count({ where: activeAdsWhere() }),
     db.article.findMany({ where: { origin: "imported", deletedAt: null }, take: 6, orderBy: { discoveredAt: "desc" }, include: { university: { select: { name: true } } } }),

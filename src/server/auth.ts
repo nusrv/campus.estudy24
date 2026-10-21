@@ -9,17 +9,17 @@ import { ADMIN_PATH, SESSION_COOKIE, SESSION_TTL_SECONDS, HttpError, authorizeRo
 export async function session() {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!token || !/^[A-Za-z0-9_-]{43}$/.test(token)) return null;
-  const record = await db.adminSession.findUnique({ where: { tokenHash: tokenDigest(token, authSecret()) }, include: { administrator: true } });
-  if (!record || record.expiresAt.getTime() <= Date.now() || !record.administrator.active) return null;
+  const record = await db.adminSession.findUnique({ where: { tokenHash: tokenDigest(token, authSecret()) }, include: { administrator: { include: { university: { select: { id: true, name: true, slug: true, enabled: true } } } } } });
+  if (!record || record.expiresAt.getTime() <= Date.now() || !record.administrator.active || (record.administrator.role === 'ambassador' && !record.administrator.university?.enabled)) return null;
   return record;
 }
 export async function requireAdminPage() {
   const record = await session();
   if (!record) redirect(`${ADMIN_PATH}/login`);
-  authorizeRole(record.administrator.role, ["owner", "editor"]);
+  authorizeRole(record.administrator.role, ["owner", "editor", "ambassador"]);
   return record;
 }
-export async function requireAdmin(request: Request, roles: readonly string[] = ["owner", "editor"]) {
+export async function requireAdmin(request: Request, roles: readonly string[] = ["owner", "editor", "ambassador"]) {
   const record = await session();
   if (!record) throw new HttpError(401, "UNAUTHORIZED", "Administrator authentication is required.");
   authorizeRole(record.administrator.role, roles);
@@ -35,8 +35,8 @@ export async function createSession(administratorId: string, expectedPasswordHas
   const expiresAt = new Date(Date.now() + SESSION_TTL_SECONDS * 1000);
   const record = await db.$transaction(async tx => {
     await lockAdministrators(tx);
-    const admin = await tx.administrator.findUnique({ where: { id: administratorId } });
-    if (!admin?.active || admin.passwordHash !== expectedPasswordHash || await tx.adminPasswordReset.count({ where: { administratorId, expiresAt: { gt: new Date() } } })) throw new HttpError(401, "INVALID_CREDENTIALS", "The account requires a password reset or login retry.");
+    const admin = await tx.administrator.findUnique({ where: { id: administratorId }, include: { university: { select: { enabled: true } } } });
+    if (!admin?.active || (admin.role === 'ambassador' && !admin.university?.enabled) || admin.passwordHash !== expectedPasswordHash || await tx.adminPasswordReset.count({ where: { administratorId, expiresAt: { gt: new Date() } } })) throw new HttpError(401, "INVALID_CREDENTIALS", "The account requires a password reset or login retry.");
     return tx.adminSession.create({ data: { administratorId, tokenHash: tokenDigest(token, authSecret()), expiresAt } });
   });
   (await cookies()).set(SESSION_COOKIE, token, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "strict", path: ADMIN_PATH, maxAge: SESSION_TTL_SECONDS, expires: expiresAt });

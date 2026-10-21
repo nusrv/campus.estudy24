@@ -1,5 +1,7 @@
 # Plesk production deployment — campus.estudy24.com
 
+For the Ambassador release, apply the additive migration and follow [AMBASSADORS.md](AMBASSADORS.md). Hosting settings, `server.js`, environment variables and n8n requests remain unchanged.
+
 For the news-category update, run the explicit category seed described in [NEWS-CATEGORIES.md](NEWS-CATEGORIES.md). No new migration or hosting configuration change is required for that update.
 
 For the current content-automation release, apply [CONTENT-AUTOMATION.md](CONTENT-AUTOMATION.md) first. For the earlier university/key/counter release, also apply [the current migration and explicit ten-university seed instructions](INTEGRATIONS.md). Hosting settings below stay the same.
@@ -50,13 +52,13 @@ No setup/admin links appear in public navigation. All private pages inherit no-i
 
 ## Additional administrators and resets
 
-Owners open **المشرفون** in the private dashboard. New accounts are always editors; role promotion is not an accepted API field. Owners can edit identity, disable/re-enable or remove accounts, and issue password-reset codes. Editors cannot access account management or security settings. The application prevents self-removal/self-disable and removal/disabling of the last active owner, including concurrent requests. Account changes revoke sessions and outstanding reset codes. Deletion retains audit records; response objects never include password hashes.
+Owners open **المشرفون** in the private dashboard. They can create Owner, Editor and Ambassador accounts. Ambassadors require exactly one enabled university; see [AMBASSADORS.md](AMBASSADORS.md) for scoped content permissions and assignment changes. Owners can edit identity, disable/re-enable or remove accounts, and issue password-reset codes. Editors and Ambassadors cannot manage accounts or security settings. The application prevents self-removal/self-disable/self-demotion and removal, disabling or demotion of the last active Owner, including concurrent requests. Account changes revoke sessions and outstanding reset codes. Deletion retains audit records; response objects never include password hashes.
 
 Reset issuance invalidates sessions immediately and returns a random code once to the authorized owner. Deliver it to the account holder through a trusted private channel, together with **`https://campus.estudy24.com/portal-control-x7k92/reset`**. The account holder enters their email, code and new password; no email service or public registration is added. Codes expire after 30 minutes, are stored only as HMAC digests, are single-use across concurrent requests, and never appear in URLs or audit logs. A pending unexpired reset blocks login with the old password. Expiration cancels that pending reset; the previous password remains valid until a successful reset. Run the existing `maintenance` task to clear expired records. Password fields are masked and never put into command arguments, logs, or audit details.
 
 ## Database changes and limitations
 
-The additive migration creates only `AdministrationBootstrap` and `AdminPasswordReset` plus indexes/foreign key. Existing administrators, hashes, sessions, content, integrations, and prior migration files are preserved. No production database operation or Plesk deployment is performed by development checks.
+The original administrator-setup migration creates `AdministrationBootstrap` and `AdminPasswordReset` plus indexes/foreign key. The subsequent [Ambassador migration](AMBASSADORS.md) adds the role, university assignment and upload scope. Existing administrators, hashes, sessions, content, integrations, and prior migration files are preserved. No production database operation or Plesk deployment is performed by development checks.
 
 Local production-server/asset verification establishes the startup entry works with the built project; final Passenger, TLS, proxy and filesystem permissions must still be checked on your Plesk installation after the manual restart.
 

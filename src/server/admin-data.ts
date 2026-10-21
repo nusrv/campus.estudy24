@@ -1,4 +1,6 @@
 import "server-only";
+import { administratorAccess, contentPermission, universityScope, bindUniversity, scopedRecord, revokeUniversitySessions } from "./administrator-access";
+import { validateScopedMedia } from "./administrator-media";
 import { Prisma } from "@prisma/client";
 import { db } from "./db";
 import { HttpError } from "./security";
@@ -26,7 +28,11 @@ async function protectSyncedFields(tx: Prisma.TransactionClient, resource: strin
   await tx.contentSync.update({ where: { id: sync.id }, data: { editedFields: [...new Set([...sync.editedFields, ...edited])] } });
 }
 
-export async function adminList(resource: Resource, search: URLSearchParams) {
+export async function adminList(resource: Resource, search: URLSearchParams, administratorId: string, sessionId?: string) {
+  const actor = await administratorAccess(db, administratorId, false, sessionId);
+  contentPermission(actor, resource);
+  const scope = universityScope(actor);
+  if (actor.role === "ambassador" && [...search].some(([key, value]) => (key === "university" && value !== actor.university?.slug) || (["universityId", "university_id", "university_slug"].includes(key) && value !== actor.universityId))) throw new HttpError(403, "UNIVERSITY_SCOPE", "University filter is outside your assignment.");
   const p = pagination(search);
   const args = { skip: p.skip, take: p.take };
   const textSearch = p.search ? { contains: p.search, mode: "insensitive" as const } : undefined;
@@ -38,8 +44,8 @@ export async function adminList(resource: Resource, search: URLSearchParams) {
       [items, total] = await Promise.all([db.platformPost.findMany({ where, ...args, orderBy: { updatedAt: "desc" }, include: { category: true } }), db.platformPost.count({ where })]); break;
     }
     case "articles": {
-      const where: Prisma.ArticleWhereInput = { deletedAt: p.deleted === "true" ? { not: null } : null, ...(p.status && { status: p.status }), ...(p.university && { university: { slug: p.university } }), ...(p.category && { category: { slug: p.category } }), ...(textSearch && { title: textSearch }), ...((p.from || p.to) && { discoveredAt: { ...(p.from && { gte: new Date(p.from) }), ...(p.to && { lte: new Date(p.to) }) } }) };
-      [items, total] = await Promise.all([db.article.findMany({ where, ...args, orderBy: [{ discoveredAt: "desc" }, { id: "desc" }], include: { university: true, category: true } }), db.article.count({ where })]); break;
+      const where: Prisma.ArticleWhereInput = { ...scope, deletedAt: p.deleted === "true" ? { not: null } : null, ...(p.status && { status: p.status }), ...(p.university && { university: { slug: p.university } }), ...(p.category && { category: { slug: p.category } }), ...(textSearch && { title: textSearch }), ...((p.from || p.to) && { discoveredAt: { ...(p.from && { gte: new Date(p.from) }), ...(p.to && { lte: new Date(p.to) }) } }) };
+      [items, total] = await Promise.all([db.article.findMany({ where, ...args, orderBy: [{ discoveredAt: "desc" }, { id: "desc" }], include: { university: { select: { id: true, name: true, slug: true } }, category: true } }), db.article.count({ where })]); break;
     }
     case "universities": {
       const where = textSearch ? { name: textSearch } : {};
@@ -51,15 +57,15 @@ export async function adminList(resource: Resource, search: URLSearchParams) {
       items = records.map(a => ({ ...a, universityIds: a.universities.map(u => u.universityId), placementIds: a.placementAssignments.length ? a.placementAssignments.map(p => p.placementId) : [a.placementId] })); total = await db.advertisement.count({ where }); break;
     }
     case "links": {
-      const where = textSearch ? { title: textSearch } : {};
+      const where = { ...scope, ...(textSearch ? { title: textSearch } : {}) };
       [items, total] = await Promise.all([db.managedLink.findMany({ where, ...args, orderBy: { displayOrder: "asc" } }), db.managedLink.count({ where })]); break;
     }
     case "events": {
-      const where = textSearch ? { title: textSearch } : {};
+      const where = { ...scope, ...(textSearch ? { title: textSearch } : {}) };
       [items, total] = await Promise.all([db.event.findMany({ where, ...args, orderBy: { startsAt: "desc" } }), db.event.count({ where })]); break;
     }
     case "programs": {
-      const where = textSearch ? { title: textSearch } : {};
+      const where = { ...scope, ...(textSearch ? { title: textSearch } : {}) };
       [items, total] = await Promise.all([db.program.findMany({ where, ...args, orderBy: { startsAt: "desc" } }), db.program.count({ where })]); break;
     }
     case "sources": [items, total] = await Promise.all([db.ingestionSource.findMany({ ...args, orderBy: { name: "asc" }, include: { university: true } }), db.ingestionSource.count()]); break;
@@ -70,29 +76,37 @@ export async function adminList(resource: Resource, search: URLSearchParams) {
   return { items, total, page: p.page, page_size: p.take, pages: Math.ceil(total / p.take) };
 }
 
-export async function articleDetails(id: string) {
-  const item = await db.article.findUnique({ where: { id }, include: { university: true, category: true, media: { orderBy: { sortOrder: "asc" } }, registrationLinks: true, edits: { orderBy: { createdAt: "desc" }, take: 20, include: { administrator: { select: { name: true } } } } } });
+export async function articleDetails(id: string, administratorId: string, sessionId?: string) {
+  const actor = await administratorAccess(db, administratorId, false, sessionId);
+  contentPermission(actor, "articles");
+  const item = await db.article.findFirst({ where: { id, ...universityScope(actor) }, include: { university: { select: { id: true, name: true, slug: true } }, category: true, media: { orderBy: { sortOrder: "asc" } }, registrationLinks: true, edits: { orderBy: { createdAt: "desc" }, take: 20, include: { administrator: { select: { name: true } } } } } });
   if (!item) throw new HttpError(404, "NOT_FOUND", "Article not found.");
-  return { ...item, imageUrls: item.media.filter(m => m.kind === "image").map(m => m.url), pdfUrls: item.media.filter(m => m.kind === "pdf").map(m => m.url), registrationLinks: item.registrationLinks.map(m => m.url) };
+  // Historical snapshots may predate an Owner's university reassignment; keep those private.
+  return { ...item, ...(actor.role === 'ambassador' && { edits: [] }), imageUrls: item.media.filter(m => m.kind === "image").map(m => m.url), pdfUrls: item.media.filter(m => m.kind === "pdf").map(m => m.url), registrationLinks: item.registrationLinks.map(m => m.url) };
 }
 
-export async function saveResource(resource: Resource, raw: unknown, administratorId: string, recordId?: string, transaction?: Prisma.TransactionClient) {
+export async function saveResource(resource: Resource, raw: unknown, administratorId: string, recordId?: string, transaction?: Prisma.TransactionClient, sessionId?: string) {
   const save = async (tx: Prisma.TransactionClient) => {
+    const actor = await administratorAccess(tx, administratorId, true, sessionId);
+    contentPermission(actor, resource, 'write');
+    if (recordId) await scopedRecord(tx, actor, resource, recordId);
+    const input = bindUniversity(actor, raw);
+    await validateScopedMedia(tx, actor, input);
     let item: { id: string };
     if (resource === "platform_posts") {
       const old = recordId ? await tx.platformPost.findUniqueOrThrow({ where: { id: recordId } }) : null;
       if (raw && typeof raw === "object" && "action" in raw) {
-        platformPostActionSchema.parse(raw);
+        platformPostActionSchema.parse(input);
         if (!recordId) throw new HttpError(422, "RECORD_REQUIRED", "Restoration requires an existing record.");
         item = await tx.platformPost.update({ where: { id: recordId }, data: { deletedAt: null } });
       } else {
-        const data = platformPostSchema.parse(raw);
+        const data = platformPostSchema.parse(input);
         const publishedAt = data.status === "published" ? old?.publishedAt || new Date() : old?.publishedAt || null;
         item = recordId ? await tx.platformPost.update({ where: { id: recordId }, data: { ...data, publishedAt } }) : await tx.platformPost.create({ data: { ...data, publishedAt } });
       }
       await tx.auditLog.create({ data: { administratorId, entity: resource, entityId: item.id, action: "editorial_snapshot", details: snapshot({ before: old, after: item }) } });
     } else if (resource === "articles") {
-      const parsed = recordId ? articlePatchSchema.parse(raw) : articleSchema.parse(raw);
+      const parsed = recordId ? articlePatchSchema.parse(input) : articleSchema.parse(input);
       const { imageUrls, pdfUrls, registrationLinks, originalPublishedAt, ...fields } = parsed;
       const action = "action" in fields ? fields.action : undefined;
       const clean = { ...fields };
@@ -119,15 +133,16 @@ export async function saveResource(resource: Resource, raw: unknown, administrat
         }
         await tx.articleEdit.create({ data: { articleId: recordId, administratorId, before: snapshot(old), after: snapshot({ ...item, imageUrls, pdfUrls, registrationLinks }) } });
       } else {
-        const value = articleSchema.parse(raw);
+        const value = articleSchema.parse(input);
         const { imageUrls: images, pdfUrls: pdfs, registrationLinks: registrations, originalPublishedAt: originalDate, ...data } = value;
         item = await tx.article.create({ data: { ...data, originalPublishedAt: dateOrNull(originalDate), origin: "manual", publishedAt: data.status === "published" ? new Date() : null, media: { create: [...images.map(url => ({ url, kind: "image" as const })), ...pdfs.map(url => ({ url, kind: "pdf" as const }))].map((m, sortOrder) => ({ ...m, sortOrder, attribution: data.sourceUrl || "administrator_provided", usage: m.url.startsWith("/media/") ? "administrator_upload" : "external_reference_only" })) }, registrationLinks: { create: [...new Set(registrations)].map(url => ({ url })) } } });
       }
     } else if (resource === "universities") {
-      const data = universitySchema.parse(raw);
+      const data = universitySchema.parse(input);
       item = recordId ? await tx.university.update({ where: { id: recordId }, data }) : await tx.university.create({ data });
+      if (recordId && !data.enabled) await revokeUniversitySessions(tx, recordId);
     } else if (resource === "ads") {
-      const { universityIds, placementIds, startsAt, endsAt, ...fields } = adSchema.parse(raw);
+      const { universityIds, placementIds, startsAt, endsAt, ...fields } = adSchema.parse(input);
       const data = { ...fields, startsAt: dateOrNull(startsAt), endsAt: dateOrNull(endsAt) };
       if (recordId) {
         item = await tx.advertisement.update({ where: { id: recordId }, data });
@@ -137,45 +152,45 @@ export async function saveResource(resource: Resource, raw: unknown, administrat
       await tx.advertisementPlacementAssignment.createMany({ data: placementIds.map(placementId => ({ advertisementId: item.id, placementId })) });
       if (!data.global) await tx.advertisementUniversity.createMany({ data: [...new Set(universityIds)].map(universityId => ({ universityId, advertisementId: item.id })) });
     } else if (resource === "links") {
-      const data = linkSchema.parse(raw);
+      const data = linkSchema.parse(input);
       await protectSyncedFields(tx, resource, recordId, data);
       item = recordId ? await tx.managedLink.update({ where: { id: recordId }, data }) : await tx.managedLink.create({ data });
     } else if (resource === "events") {
-      const parsed = eventSchema.parse(raw);
+      const parsed = eventSchema.parse(input);
       const data = { ...parsed, startsAt: new Date(parsed.startsAt), endsAt: dateOrNull(parsed.endsAt) };
       await protectSyncedFields(tx, resource, recordId, data);
       item = recordId ? await tx.event.update({ where: { id: recordId }, data }) : await tx.event.create({ data });
     } else if (resource === "programs") {
-      const parsed = programSchema.parse(raw);
+      const parsed = programSchema.parse(input);
       const data = { ...parsed, startsAt: new Date(parsed.startsAt), endsAt: dateOrNull(parsed.endsAt) };
       await protectSyncedFields(tx, resource, recordId, data);
       item = recordId ? await tx.program.update({ where: { id: recordId }, data }) : await tx.program.create({ data });
     } else if (resource === "sources") {
-      const data = sourceSchema.parse(raw);
+      const data = sourceSchema.parse(input);
       if (recordId) {
         const old = await tx.ingestionSource.findUnique({ where: { id: recordId }, include: { _count: { select: { articles: true, contentSyncs: true } } } });
         if (old && (old._count.articles || old._count.contentSyncs) && (old.key !== data.key || old.universityId !== data.universityId)) throw new HttpError(409, "SOURCE_IN_USE", "Source identity cannot change after ingestion.");
       }
       item = recordId ? await tx.ingestionSource.update({ where: { id: recordId }, data }) : await tx.ingestionSource.create({ data });
     } else if (resource === "categories") {
-      const data = categorySchema.parse(raw);
+      const data = categorySchema.parse(input);
       item = recordId ? await tx.articleCategory.update({ where: { id: recordId }, data }) : await tx.articleCategory.create({ data });
     } else throw new HttpError(405, "READ_ONLY", "This resource is read-only.");
-    await tx.auditLog.create({ data: { administratorId, action: recordId ? "update" : "create", entity: resource, entityId: item.id, details: { fields: Object.keys(raw as object) } } });
+    await tx.auditLog.create({ data: { administratorId, action: recordId ? "update" : "create", entity: resource, entityId: item.id, details: { actorId: administratorId, fields: Object.keys(raw as object), universityId: "universityId" in item ? item.universityId as string | null : null } } });
     return item;
   };
   return transaction ? save(transaction) : db.$transaction(save, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 15000 });
 }
 
-export async function bulkDeleteArticles(raw: unknown, administratorId: string) {
+export async function bulkDeleteArticles(raw: unknown, administratorId: string, sessionId?: string) {
   const { ids } = bulkArticleDeleteSchema.parse(raw);
   const ordered = [...ids].sort();
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       return await db.$transaction(async tx => {
-        const actor = await tx.administrator.findUnique({ where: { id: administratorId } });
-        if (!actor?.active || actor.role !== 'owner') throw new HttpError(403, 'FORBIDDEN', 'حذف الأخبار متاح للمالك فقط.');
-        const count = await tx.article.count({ where: { id: { in: ordered }, deletedAt: null } });
+        const actor = await administratorAccess(tx, administratorId, true, sessionId);
+        contentPermission(actor, 'articles', 'delete');
+        const count = await tx.article.count({ where: { id: { in: ordered }, deletedAt: null, ...universityScope(actor) } });
         if (count !== ordered.length) throw new HttpError(409, 'STALE_SELECTION', 'تغيّر التحديد أو حُذف أحد الأخبار مسبقًا. لم يُحذف أي خبر من هذا الطلب. حدّث القائمة وأعد التحديد.');
         // The identical individual-delete path, all inside one transaction: any error rolls back every row and audit entry.
         for (const id of ordered) await saveResource('articles', { action: 'soft_delete' }, administratorId, id, tx);
@@ -192,9 +207,13 @@ export async function bulkDeleteArticles(raw: unknown, administratorId: string) 
   throw new HttpError(503, 'DELETE_FAILED', 'تعذّر إتمام عملية الحذف.');
 }
 
-export async function deleteResource(resource: Resource, id: string, administratorId: string) {
-  if (resource === "articles") return saveResource(resource, { action: "soft_delete" }, administratorId, id);
+export async function deleteResource(resource: Resource, id: string, administratorId: string, sessionId?: string) {
+  if (resource === "articles") return saveResource(resource, { action: "soft_delete" }, administratorId, id, undefined, sessionId);
   return db.$transaction(async tx => {
+    const actor = await administratorAccess(tx, administratorId, true, sessionId);
+    contentPermission(actor, resource, 'delete');
+    await scopedRecord(tx, actor, resource, id);
+    const universityId = actor.role === 'ambassador' ? actor.universityId : resource === 'links' ? (await tx.managedLink.findUnique({ where: { id } }))?.universityId : resource === 'events' ? (await tx.event.findUnique({ where: { id } }))?.universityId : resource === 'programs' ? (await tx.program.findUnique({ where: { id } }))?.universityId : null;
     if (['links', 'events', 'programs'].includes(resource)) await tx.contentSync.updateMany({ where: { recordId: id, contentType: { in: resource === 'events' ? ['events', 'calendar'] : [resource] } }, data: { deletedAt: new Date() } });
     switch (resource) {
       case "platform_posts": await tx.platformPost.update({ where: { id }, data: { deletedAt: new Date() } }); break;
@@ -203,11 +222,11 @@ export async function deleteResource(resource: Resource, id: string, administrat
       case "events": await tx.event.delete({ where: { id } }); break;
       case "programs": await tx.program.delete({ where: { id } }); break;
       // Universities and sources are disabled instead of deleted, preserving provenance.
-      case "universities": await tx.university.update({ where: { id }, data: { enabled: false } }); break;
+      case "universities": await tx.university.update({ where: { id }, data: { enabled: false } }); await revokeUniversitySessions(tx, id); break;
       case "sources": await tx.ingestionSource.update({ where: { id }, data: { enabled: false } }); break;
       default: throw new HttpError(405, "DELETE_NOT_SUPPORTED", "Deletion is not available for this resource.");
     }
-    await tx.auditLog.create({ data: { administratorId, action: ["universities", "sources"].includes(resource) ? "disable" : "delete", entity: resource, entityId: id } });
+    await tx.auditLog.create({ data: { administratorId, action: ["universities", "sources"].includes(resource) ? "disable" : "delete", entity: resource, entityId: id, details: { actorId: administratorId, universityId: universityId || null } } });
     return { id };
   });
 }

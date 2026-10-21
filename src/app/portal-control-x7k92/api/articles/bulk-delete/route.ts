@@ -7,9 +7,9 @@ import { failure, json } from '@/server/http';
 export const runtime = 'nodejs';
 export async function POST(request: Request) {
   try {
-    const auth = await requireAdmin(request, ['owner']);
+    const auth = await requireAdmin(request, ['owner', 'ambassador']);
     const input = bulkArticleDeleteSchema.parse(await readJson(request, 32768));
-    return json(await bulkDeleteArticles(input, auth.administratorId));
+    return json(await bulkDeleteArticles(input, auth.administratorId, auth.id));
   } catch (error) {
     if (error instanceof ZodError) return failure(new HttpError(422, 'INVALID_SELECTION', 'التحديد غير صالح. أرسل من 1 إلى 100 معرّف خبر صحيح دون تكرار.'));
     if (error instanceof HttpError) {

@@ -2,7 +2,7 @@
 import type { PrismaClient, Prisma } from '@prisma/client';
 import { constantEqual, hashPassword, HttpError, newToken, tokenDigest } from './security.ts';
 type Transaction = Prisma.TransactionClient;
-export const administratorSelect = { id: true, email: true, name: true, role: true, active: true, createdAt: true } as const;
+export const administratorSelect = { id: true, email: true, name: true, role: true, active: true, universityId: true, university: { select: { id: true, name: true } }, createdAt: true } as const;
 // All account writes share a PostgreSQL transaction lock, across processes/replicas.
 export async function lockAdministrators(tx: Transaction) {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(214721, 792)`;
@@ -28,25 +28,41 @@ async function requireOwner(tx: Transaction, actorId: string) {
   const actor = await tx.administrator.findUnique({ where: { id: actorId } });
   if (!actor?.active || actor.role !== 'owner') throw new HttpError(403, 'FORBIDDEN', 'Owner access is required.');
 }
+type AccountRole = 'owner' | 'editor' | 'ambassador';
+async function accountAssignment(tx: Transaction, role: AccountRole, universityId?: string | null, requireEnabled = true) {
+  if (role !== 'ambassador') {
+    if (universityId) throw new HttpError(422, 'INVALID_ASSIGNMENT', 'تعيين جامعة متاح لحساب سفير الجامعة فقط.');
+    return null;
+  }
+  if (!universityId || !await tx.university.findFirst({ where: { id: universityId, ...(requireEnabled && { enabled: true }) } })) throw new HttpError(422, 'INVALID_ASSIGNMENT', 'اختر جامعة موجودة ومفعّلة لسفير الجامعة.');
+  return universityId;
+}
 export async function createEditor(db: PrismaClient, actorId: string, input: { email: string; name: string; password: string }) {
+  return createAdministrator(db, actorId, { ...input, role: 'editor' });
+}
+export async function createAdministrator(db: PrismaClient, actorId: string, input: { email: string; name: string; password: string; role?: AccountRole; universityId?: string | null }) {
   const passwordHash = await hashPassword(input.password);
   return db.$transaction(async tx => {
     await lockAdministrators(tx); await requireOwner(tx, actorId);
-    const admin = await tx.administrator.create({ data: { email: input.email, name: input.name, passwordHash, role: 'editor' }, select: administratorSelect });
-    await tx.auditLog.create({ data: { administratorId: actorId, action: 'administrator_created', entity: 'administrators', entityId: admin.id } });
+    const role = input.role || 'editor';
+    const universityId = await accountAssignment(tx, role, input.universityId);
+    const admin = await tx.administrator.create({ data: { email: input.email, name: input.name, passwordHash, role, universityId }, select: administratorSelect });
+    await tx.auditLog.create({ data: { administratorId: actorId, action: 'administrator_created', entity: 'administrators', entityId: admin.id, details: { role: admin.role, universityId: admin.universityId } } });
     return admin;
   });
 }
-export async function changeAdministrator(db: PrismaClient, actorId: string, id: string, input: { email: string; name: string; active: boolean } | null) {
+export async function changeAdministrator(db: PrismaClient, actorId: string, id: string, input: { email: string; name: string; active: boolean; role?: AccountRole; universityId?: string | null } | null) {
   return db.$transaction(async tx => {
     await lockAdministrators(tx); await requireOwner(tx, actorId);
     const before = await tx.administrator.findUnique({ where: { id }, select: administratorSelect });
     if (!before) throw new HttpError(404, 'NOT_FOUND', 'Administrator not found.');
-    if (id === actorId && (!input || !input.active)) throw new HttpError(409, 'SELF_PROTECTION', 'You cannot remove or disable your own account.');
-    if (before.active && before.role === 'owner' && (!input || !input.active) && await tx.administrator.count({ where: { role: 'owner', active: true } }) <= 1) throw new HttpError(409, 'LAST_OWNER', 'The last active owner must be preserved.');
+    const role = input?.role || before.role;
+    const universityId = input ? await accountAssignment(tx, role, input.universityId === undefined && role === before.role ? before.universityId : input.universityId, input.active) : null;
+    if (id === actorId && (!input || !input.active || role !== 'owner')) throw new HttpError(409, 'SELF_PROTECTION', 'لا يمكنك حذف حسابك أو تعطيله أو إلغاء دور مدير المنصة لنفسك.');
+    if (before.active && before.role === 'owner' && (!input || !input.active || role !== 'owner') && await tx.administrator.count({ where: { role: 'owner', active: true } }) <= 1) throw new HttpError(409, 'LAST_OWNER', 'يجب الإبقاء على مدير منصة نشط واحد على الأقل.');
     await tx.adminSession.deleteMany({ where: { administratorId: id } });
     await tx.adminPasswordReset.deleteMany({ where: { administratorId: id } });
-    const after = input ? await tx.administrator.update({ where: { id }, data: input, select: administratorSelect }) : null;
+    const after = input ? await tx.administrator.update({ where: { id }, data: { ...input, role, universityId }, select: administratorSelect }) : null;
     if (!input) await tx.administrator.delete({ where: { id } });
     await tx.auditLog.create({ data: { administratorId: actorId, action: input ? 'administrator_updated' : 'administrator_removed', entity: 'administrators', entityId: id, details: { before: JSON.parse(JSON.stringify(before)), after: after ? JSON.parse(JSON.stringify(after)) : null } } });
     return after;

@@ -1,7 +1,7 @@
 import { db } from '@/server/db';
 import { requireAdmin } from '@/server/auth';
-import { administratorSelect, createEditor } from '@/server/administrator-service';
-import { editorSchema } from '@/server/administrator-validation';
+import { administratorSelect, createAdministrator } from '@/server/administrator-service';
+import { administratorCreateSchema } from '@/server/administrator-validation';
 import { readJson } from '@/server/security';
 import { failure, json } from '@/server/http';
 export async function GET(request: Request) {
@@ -9,6 +9,6 @@ export async function GET(request: Request) {
   catch (error) { return failure(error); }
 }
 export async function POST(request: Request) {
-  try { const actor = await requireAdmin(request, ['owner']); const input = editorSchema.parse(await readJson(request, 4096)); return json(await createEditor(db, actor.administratorId, input), 201); }
+  try { const actor = await requireAdmin(request, ['owner']); const input = administratorCreateSchema.parse(await readJson(request, 4096)); return json(await createAdministrator(db, actor.administratorId, input), 201); }
   catch (error) { return failure(error); }
 }

@@ -23,6 +23,7 @@ enum OriginType {
 enum AdminRole {
   owner
   editor
+  ambassador
 }
 
 enum AdvertisementStatus {
@@ -80,6 +81,8 @@ model University {
   programs    Program[]
   ads         AdvertisementUniversity[]
   links       ManagedLink[]
+  administrators Administrator[]
+  uploads UploadedMedia[]
   apiKeys     UniversityApiKey[]
 }
 
@@ -322,6 +325,8 @@ model Administrator {
   id           String       @id @default(cuid())
   email        String       @unique
   name         String
+  universityId String?
+  university University? @relation(fields: [universityId], references: [id], onDelete: Restrict)
   passwordHash String
   role         AdminRole    @default(owner)
   active       Boolean      @default(true)
@@ -331,6 +336,7 @@ model Administrator {
   audits       AuditLog[]
   edits        ArticleEdit[]
   passwordResets AdminPasswordReset[]
+  @@index([universityId])
 }
 
 model AdministrationBootstrap {
@@ -438,10 +444,13 @@ model RateLimitBucket {
 }
 
 model UploadedMedia {
+  universityId String?
+  university University? @relation(fields: [universityId], references: [id], onDelete: Restrict)
   id           String   @id @default(cuid())
   filename     String   @unique
   originalName String
   mimeType     String
   size         Int
   createdAt    DateTime @default(now())
+  @@index([universityId])
 }

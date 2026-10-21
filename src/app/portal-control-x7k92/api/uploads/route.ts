@@ -1,3 +1,4 @@
+import { administratorAccess } from "@/server/administrator-access";
 import { mkdir, writeFile, unlink } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
@@ -30,8 +31,9 @@ export async function POST(request: Request) {
     await writeFile(target, bytes, { flag: "wx", mode: 0o600 });
     try {
       const media = await db.$transaction(async tx => {
-        const item = await tx.uploadedMedia.create({ data: { filename, originalName: file.name.replace(/[\u0000-\u001f]/g, "").slice(0, 200), mimeType: file.type, size: bytes.length } });
-        await tx.auditLog.create({ data: { administratorId: auth.administratorId, action: "upload", entity: "media", entityId: item.id } });
+        const actor = await administratorAccess(tx, auth.administratorId, true, auth.id);
+        const item = await tx.uploadedMedia.create({ data: { universityId: actor.role === "ambassador" ? actor.universityId : null, filename, originalName: file.name.replace(/[\u0000-\u001f]/g, "").slice(0, 200), mimeType: file.type, size: bytes.length } });
+        await tx.auditLog.create({ data: { administratorId: auth.administratorId, action: "upload", entity: "media", entityId: item.id, details: { actorId: auth.administratorId, universityId: item.universityId } } });
         return item;
       });
       return json({ id: media.id, url: `/media/${media.id}`, mime_type: media.mimeType, size: media.size }, 201);

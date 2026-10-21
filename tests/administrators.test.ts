@@ -15,7 +15,8 @@ test('8-character password policy is shared by hashing, setup, editor creation, 
   assert.equal(editorSchema.safeParse({ ...base, password: password.slice(1) }).success, false);
   assert.equal(editorSchema.safeParse({ ...base, confirmation: password + 'x' }).success, false);
   assert.equal(editorSchema.safeParse({ ...base, role: 'owner' }).success, false);
-  assert.equal(administratorUpdateSchema.safeParse({ email: base.email, name: base.name, active: true, role: 'owner' }).success, false);
+  assert.equal(administratorUpdateSchema.safeParse({ email: base.email, name: base.name, active: true, role: 'owner' }).success, true);
+  assert.equal(administratorUpdateSchema.safeParse({ email: base.email, name: base.name, active: true, role: 'ambassador' }).success, false);
 });
 test('browser bootstrap is closed without a strong matching server-side authorization', () => {
   const token = randomBytes(32).toString('base64url');
