@@ -1,22 +1,29 @@
 "use client";
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { CONTROL_PATH } from "./config";
-import { useAdmin } from "./shell";
-
-export type VisitorSettingsValue = { visitorCounterEnabled: boolean; visitorCounterLabel: string; visitorBaseline: number; visitorBaselineVerified: boolean; visitorBaselineEvidence: string | null; visitorBaselineAsOf: string | null; trackingStartedAt?: string };
-export function VisitorSettings({ initial, tracked }: { initial: VisitorSettingsValue; tracked: number }) {
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { formatVisits } from '@/lib/visitor-counter';
+import { CONTROL_PATH } from './config';
+import { useAdmin } from './shell';
+export function VisitorSettings({ initial, tracked }: { initial: { visitorStartingValue: number }; tracked: number }) {
   const { csrf } = useAdmin();
-  const [value, setValue] = useState(initial);
+  const [value, setValue] = useState(String(initial.visitorStartingValue));
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
   async function save(event: React.FormEvent) {
-    event.preventDefault(); setBusy(true); setMessage(""); setError("");
-    const { trackingStartedAt: _started, ...data } = value;
-    try { const response = await fetch(`${CONTROL_PATH}/api/settings`, { method: "PATCH", headers: { "Content-Type": "application/json", "x-csrf-token": csrf }, body: JSON.stringify(data) }); const body = await response.json(); if (!response.ok) throw new Error(body.error?.fields?.map((f: { message: string }) => f.message).join(" — ") || body.error?.message || "تعذّر الحفظ."); setValue(body); setMessage("تم حفظ إعدادات العدّاد."); } catch (err) { setError(err instanceof Error ? err.message : "تعذّر الاتصال بالخادم."); } finally { setBusy(false); }
+    event.preventDefault(); setMessage(''); setError('');
+    const number = Number(value);
+    if (!value.trim() || !Number.isSafeInteger(number) || number < 0 || number > 2147483647) { setError('أدخل عددًا صحيحًا من 0 إلى 2,147,483,647.'); return; }
+    setBusy(true);
+    try {
+      const response = await fetch(`${CONTROL_PATH}/api/settings`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrf }, body: JSON.stringify({ visitorStartingValue: number }) });
+      const body = await response.json();
+      if (!response.ok) { setError(response.status === 422 ? body.error?.fields?.map((field: { message: string }) => field.message).join(' — ') || 'القيمة غير صالحة.' : 'تعذّر حفظ القيمة. تحقّق من صلاحية الجلسة وحاول مجددًا.'); return; }
+      setValue(String(body.visitorStartingValue)); setMessage('تم حفظ القيمة الابتدائية دون تغيير الزيارات المسجّلة.');
+    } catch { setError('تعذّر الاتصال بالخادم. حاول مجددًا.'); }
+    finally { setBusy(false); }
   }
-  return <div className="max-w-3xl space-y-6"><h1 className="text-2xl font-medium">عدّاد زيارات البوابة</h1><p className="text-sm leading-8 text-secondary-foreground">الزيارات المسجّلة فعليًا: <strong className="font-medium text-primary">{tracked.toLocaleString("ar-SA")}</strong>. تُخفّض تكرارات تحديث الصفحة خلال جلسة مدتها ٣٠ دقيقة، دون إنشاء ملفات شخصية للزوّار.</p><Card><CardContent><form onSubmit={save} className="space-y-6"><label className="flex items-center gap-3 text-sm"><input type="checkbox" checked={value.visitorCounterEnabled} onChange={e => setValue(v => ({ ...v, visitorCounterEnabled: e.target.checked }))} className="size-4 accent-primary" />إظهار عدّاد الزيارات وتفعيل التسجيل</label><div className="space-y-2"><label htmlFor="counter-label" className="text-sm">النص الظاهر للزائر</label><Input id="counter-label" required maxLength={120} value={value.visitorCounterLabel} onChange={e => setValue(v => ({ ...v, visitorCounterLabel: e.target.value }))} /></div><div className="space-y-4 border-t border-border pt-6"><h2 className="text-base font-medium">الرصيد التاريخي الاختياري</h2><p className="text-xs leading-7 text-secondary-foreground">اتركه صفرًا ما لم توجد إحصاءات زيارات موثّقة تسبق بدء التسجيل الحالي. أعداد الطلبات أو المبيعات لا تُعدّ زيارات. لا يدخل الرصيد في العدّاد دون مرجع وإقرار بالتحقّق.</p><label htmlFor="baseline" className="block text-sm">عدد الزيارات التاريخية الموثّقة</label><Input id="baseline" type="number" min={0} max={2147483647} required value={value.visitorBaseline} onChange={e => setValue(v => ({ ...v, visitorBaseline: Number(e.target.value) }))} /><label className="flex items-center gap-3 text-sm"><input type="checkbox" checked={value.visitorBaselineVerified} onChange={e => setValue(v => ({ ...v, visitorBaselineVerified: e.target.checked }))} className="size-4 accent-primary" />أؤكد التحقّق من أن هذا الرقم يمثل زيارات فعلية</label><label htmlFor="evidence" className="block text-sm">مرجع التوثيق أو وصف تقرير الإحصاءات</label><Input id="evidence" maxLength={2000} required={value.visitorBaseline > 0} value={value.visitorBaselineEvidence || ""} onChange={e => setValue(v => ({ ...v, visitorBaselineEvidence: e.target.value || null }))} /><label htmlFor="baseline-date" className="block text-sm">يشمل الرصيد الزيارات حتى تاريخ (بتوقيت UTC)</label><Input id="baseline-date" type="datetime-local" required={value.visitorBaseline > 0} value={value.visitorBaselineAsOf?.slice(0, 16) || ""} onChange={e => setValue(v => ({ ...v, visitorBaselineAsOf: e.target.value ? `${e.target.value}:00.000Z` : null }))} />{value.trackingStartedAt && <p className="text-xs leading-7 text-secondary-foreground">بدأ التسجيل الحالي: {new Date(value.trackingStartedAt).toLocaleString("ar-SA", { timeZone: "Asia/Riyadh" })}. يجب أن ينتهي الرصيد التاريخي قبل هذا الموعد.</p>}</div>{error && <p role="alert" className="text-sm leading-7 text-red-700">{error}</p>}{message && <p role="status" className="text-sm text-primary">{message}</p>}<Button disabled={busy} type="submit">{busy ? "جارٍ الحفظ…" : "حفظ الإعدادات"}</Button></form></CardContent></Card></div>;
+  return <div className="max-w-2xl space-y-6"><h1 className="text-2xl font-medium">عدّاد زيارات البوابة</h1><p className="text-sm leading-8 text-secondary-foreground">الزيارات الجديدة المسجّلة: <span dir="ltr" className="font-medium text-primary">{formatVisits(tracked)}</span>. العدد الظاهر يجمع القيمة الابتدائية والزيارات الجديدة. هذه القيمة يحددها المسؤول ولا تمثّل إحصاءات مستقلة موثّقة.</p><Card><CardContent><form onSubmit={save} className="space-y-5"><label htmlFor="visitor-starting-value" className="block text-sm">القيمة الابتدائية لعداد الزيارات</label><Input id="visitor-starting-value" type="number" min={0} max={2147483647} step={1} required dir="ltr" value={value} onChange={event => setValue(event.target.value)} />{error && <p role="alert" className="text-sm leading-7 text-red-700">{error}</p>}{message && <p role="status" className="text-sm leading-7 text-primary">{message}</p>}<Button disabled={busy} type="submit">حفظ</Button></form></CardContent></Card></div>;
 }

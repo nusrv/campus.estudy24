@@ -1,0 +1,18 @@
+{
+  "name": "Campus UQU — RSS to pending review",
+  "active": false,
+  "nodes": [
+    { "id": "campus-manual", "name": "Manual Trigger", "type": "n8n-nodes-base.manualTrigger", "typeVersion": 1, "position": [0, 0], "parameters": {} },
+    { "id": "campus-rss", "name": "RSS Feed", "type": "n8n-nodes-base.rssFeedRead", "typeVersion": 1, "position": [240, 0], "parameters": { "url": "https://uqu.edu.sa/App/Rss", "options": {} } },
+    { "id": "campus-normalize", "name": "Transform Normalize", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [480, 0], "parameters": { "jsCode": "return $input.all().map(({json: item}) => { const sourceUrl = String(item.link || ''); const url = new URL(sourceUrl); if (!['http:', 'https:'].includes(url.protocol) || url.hostname !== 'uqu.edu.sa') throw new Error('Check the original UQU article URL'); const id = sourceUrl.match(/\\/App\\/News\\/(\\d+)/i)?.[1] || item.guid || item.id; if (!id) throw new Error('Stable original article ID is required'); const text = String(item.contentSnippet || item.description || item.content || '').replace(/<[^>]*>/g, ' ').trim(); const date = item.isoDate || item.pubDate; return {json: { university_slug: 'uqu', source_key: 'uqu-rss', source_id: String(id), source_url: sourceUrl, title: String(item.title || '').trim(), summary: text.slice(0, 5000), content_text: text.slice(0, 100000), published_at: date ? new Date(date).toISOString() : null, image_urls: [], pdf_urls: [], registration_links: [], category: 'general' }}; });" } },
+    { "id": "campus-http", "name": "Authenticated HTTP Request", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [720, 0], "parameters": { "method": "POST", "url": "https://campus.estudy24.com/api/ingest/articles", "authentication": "genericCredentialType", "genericAuthType": "httpHeaderAuth", "sendBody": true, "specifyBody": "json", "jsonBody": "={{ JSON.stringify($json) }}", "options": { "timeout": 30000 } }, "credentials": { "httpHeaderAuth": { "id": "CONFIGURE_LOCALLY", "name": "Campus UQU Authorization Bearer — configure locally" } } }
+  ],
+  "connections": {
+    "Manual Trigger": { "main": [[{ "node": "RSS Feed", "type": "main", "index": 0 }]] },
+    "RSS Feed": { "main": [[{ "node": "Transform Normalize", "type": "main", "index": 0 }]] },
+    "Transform Normalize": { "main": [[{ "node": "Authenticated HTTP Request", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "pinData": {},
+  "tags": []
+}

@@ -6,7 +6,6 @@ import { adminSections } from "@/components/admin/config";
 import { ResourceManager } from "@/components/admin/resource-manager";
 import { VisitorSettings } from "@/components/admin/visitor-settings";
 import { authorizeRole } from "@/server/security";
-import { DEFAULT_COUNTER_LABEL } from "@/server/visitor-policy";
 import { Administrators } from "@/components/admin/administrators";
 import { administratorSelect } from "@/server/administrator-service";
 export default async function ResourcePage({ params, searchParams }: { params: Promise<{ section: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
@@ -19,8 +18,8 @@ export default async function ResourcePage({ params, searchParams }: { params: P
   }
   if (section === "settings") {
     authorizeRole(auth.administrator.role, ["owner"]);
-    const [settings, aggregate] = await Promise.all([db.siteSettings.findUnique({ where: { id: "main" } }), db.visitorDaily.aggregate({ _sum: { visits: true } })]);
-    return <VisitorSettings initial={JSON.parse(JSON.stringify(settings || { visitorCounterEnabled: true, visitorCounterLabel: DEFAULT_COUNTER_LABEL, visitorBaseline: 0, visitorBaselineVerified: false, visitorBaselineEvidence: null, visitorBaselineAsOf: null }))} tracked={aggregate._sum.visits || 0} />;
+    const [settings, aggregate] = await Promise.all([db.siteSettings.findUnique({ where: { id: "main" }, select: { visitorStartingValue: true } }), db.visitorDaily.aggregate({ _sum: { visits: true } })]);
+    return <VisitorSettings initial={settings || { visitorStartingValue: 0 }} tracked={aggregate._sum.visits || 0} />;
   }
   if (!(RESOURCES as readonly string[]).includes(section)) notFound();
   const filters = Object.fromEntries(Object.entries(await searchParams).filter((entry): entry is [string, string] => typeof entry[1] === "string"));

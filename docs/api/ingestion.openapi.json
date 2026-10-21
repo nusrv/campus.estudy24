@@ -1,0 +1,58 @@
+{
+  "openapi": "3.1.0",
+  "info": { "title": "Campus eStudy24 — University ingestion", "version": "1.1.0", "description": "Authenticated n8n ingestion. University credentials are scoped to one university. New articles are always pending_review; manual edits and publication decisions are preserved. The legacy server-wide key remains compatible during migration." },
+  "servers": [{ "url": "https://campus.estudy24.com" }],
+  "security": [{ "UniversityKey": [] }],
+  "paths": {
+    "/api/ingest/articles": { "post": {
+      "operationId": "ingestArticle", "summary": "إنشاء أو تحديث خبر واحد للمراجعة", "description": "1 MiB maximum JSON. Deduplicated by configured source plus original source_id. Scoped credentials require matching university_slug and source university. 60 requests/minute/key and client bucket.",
+      "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Article" } } } },
+      "responses": {
+        "200": { "$ref": "#/components/responses/Result" }, "201": { "$ref": "#/components/responses/Result" },
+        "400": { "$ref": "#/components/responses/Error" }, "401": { "$ref": "#/components/responses/Error" }, "403": { "$ref": "#/components/responses/Error" }, "413": { "$ref": "#/components/responses/Error" }, "415": { "$ref": "#/components/responses/Error" }, "422": { "$ref": "#/components/responses/RecordOrError" }, "429": { "$ref": "#/components/responses/Error" }, "503": { "$ref": "#/components/responses/RecordOrError" }
+      }
+    } },
+    "/api/ingest/batch": { "post": {
+      "operationId": "ingestBatch", "summary": "استيراد دفعة من 1 إلى 50 خبرًا", "description": "1 MiB total. Per-record transactions. Check every results entry on HTTP 207. Mixed-university scoped batches are rejected before any import. Retry failed records with the same original IDs; fix rejected records first.",
+      "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "additionalProperties": false, "required": ["articles"], "properties": { "articles": { "type": "array", "minItems": 1, "maxItems": 50, "items": { "$ref": "#/components/schemas/Article" } } } } } } },
+      "responses": {
+        "200": { "$ref": "#/components/responses/Result" }, "207": { "$ref": "#/components/responses/Result" },
+        "400": { "$ref": "#/components/responses/Error" }, "401": { "$ref": "#/components/responses/Error" }, "403": { "$ref": "#/components/responses/Error" }, "413": { "$ref": "#/components/responses/Error" }, "415": { "$ref": "#/components/responses/Error" }, "422": { "$ref": "#/components/responses/RecordOrError" }, "429": { "$ref": "#/components/responses/Error" }, "503": { "$ref": "#/components/responses/RecordOrError" }
+      }
+    } }
+  },
+  "components": {
+    "securitySchemes": { "UniversityKey": { "type": "http", "scheme": "bearer", "bearerFormat": "campus_uak_ID.SECRET", "description": "Generate once in private university integration settings. Store in n8n Header Auth credentials. Never put keys in URLs or workflow exports. Owner sessions do not authenticate ingestion." } },
+    "schemas": {
+      "Url": { "type": "string", "format": "uri", "maxLength": 2048, "pattern": "^https?://", "description": "HTTP(S) only; credentials in URLs are forbidden." },
+      "Slug": { "type": "string", "minLength": 1, "maxLength": 100, "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+      "Article": {
+        "type": "object", "additionalProperties": false, "required": ["university_slug", "source_id", "source_url", "title"],
+        "properties": {
+          "university_slug": { "$ref": "#/components/schemas/Slug" },
+          "source_key": { "$ref": "#/components/schemas/Slug", "description": "Enabled configured source key; defaults to university_slug-rss. This is not a news record ID." },
+          "source_id": { "oneOf": [{ "type": "string", "minLength": 1, "maxLength": 200 }, { "type": "integer", "minimum": 0 }], "description": "Stable original article ID. Reuse on retries and future source updates." },
+          "source_url": { "$ref": "#/components/schemas/Url", "description": "Original article URL; hostname must match the configured source exactly." },
+          "title": { "type": "string", "minLength": 1, "maxLength": 500 },
+          "summary": { "type": "string", "maxLength": 5000, "default": "" },
+          "description": { "type": "string", "maxLength": 10000, "default": "" },
+          "content_text": { "type": "string", "maxLength": 100000, "default": "", "description": "Plain text displayed escaped, never trusted HTML." },
+          "published_at": { "type": ["string", "null"], "format": "date-time", "default": null, "description": "Original publication timestamp with timezone; not event or registration date." },
+          "image_urls": { "type": "array", "maxItems": 20, "items": { "$ref": "#/components/schemas/Url" }, "default": [] },
+          "pdf_urls": { "type": "array", "maxItems": 20, "items": { "$ref": "#/components/schemas/Url" }, "default": [] },
+          "registration_links": { "type": "array", "maxItems": 20, "items": { "$ref": "#/components/schemas/Url" }, "default": [] },
+          "category": { "$ref": "#/components/schemas/Slug", "default": "general" }
+        },
+        "description": "External media URLs are attributed references, not automatically downloaded/rehosted. status, origin, university_id and administrator fields are forbidden. Missing optional fields default as documented; administrator-edited fields remain protected."
+      },
+      "Outcome": { "type": "object", "required": ["index", "outcome"], "properties": { "index": { "type": "integer" }, "outcome": { "enum": ["created", "updated", "unchanged", "rejected", "failed"] }, "article_id": { "type": "string" }, "error": { "type": "object", "properties": { "code": { "type": "string" }, "fields": { "type": "array", "items": { "type": "object", "properties": { "path": { "type": "string" }, "message": { "type": "string" } } } } } } } },
+      "Result": { "type": "object", "required": ["request_id", "counts", "results"], "properties": { "request_id": { "type": "string", "format": "uuid" }, "counts": { "type": "object", "required": ["created", "updated", "unchanged", "rejected", "failed"], "properties": { "created": { "type": "integer" }, "updated": { "type": "integer" }, "unchanged": { "type": "integer" }, "rejected": { "type": "integer" }, "failed": { "type": "integer" } } }, "results": { "type": "array", "items": { "$ref": "#/components/schemas/Outcome" } } } },
+      "Error": { "type": "object", "required": ["error", "request_id"], "properties": { "request_id": { "type": "string" }, "error": { "type": "object", "required": ["code", "message"], "properties": { "code": { "type": "string" }, "message": { "type": "string" } } } } }
+    },
+    "responses": {
+      "RecordOrError": { "description": "Per-record rejection/failure envelope or a request-level error. Inspect results when present.", "content": { "application/json": { "schema": { "oneOf": [{ "$ref": "#/components/schemas/Result" }, { "$ref": "#/components/schemas/Error" }] } } } },
+      "Result": { "description": "Per-record created/updated/unchanged/rejected/failed outcomes. Retry only failures with backoff, preserving original IDs.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Result" } } } },
+      "Error": { "description": "400 INVALID_JSON; 401 UNAUTHORIZED; 403 UNIVERSITY_SCOPE_MISMATCH; 413 PAYLOAD_TOO_LARGE; 415 JSON_REQUIRED; 422 INVALID_BATCH/UNKNOWN_SOURCE/SOURCE_HOST_MISMATCH; 429 RATE_LIMITED; 503 SERVICE_UNAVAILABLE. Do not retry 4xx unchanged; retry 429/503 with bounded exponential backoff.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+    }
+  }
+}

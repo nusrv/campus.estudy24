@@ -1,6 +1,7 @@
 import { linkKinds, platformTypes } from "@/lib/portal";
 export const CONTROL_PATH = "/portal-control-x7k92";
 export const adminSections = [
+  { key: 'api-docs', title: 'وثائق API والتكاملات' },
   { key: "administrators", title: "المشرفون" },
   { key: "", title: "نظرة عامة" }, { key: "universities", title: "إدارة الجامعات" },
   { key: "articles", title: "الأخبار والمحتوى" }, { key: "ads", title: "الإعلانات" },

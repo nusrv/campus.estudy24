@@ -112,7 +112,7 @@ test("PostgreSQL + HTTP: authentication, authorization, ingestion deduplication,
         const paused = await fetch(`${origin}${ADMIN_PATH}/api/ads/${adId}`, { method: "PATCH", headers: { cookie, origin, "Content-Type": "application/json", "x-csrf-token": csrf }, body: JSON.stringify({ ...adInput, status: "paused" }) }); assert.equal(paused.status, 200);
         const hiddenAds = await fetch(`${origin}/api/ads?placement=sidebar`); assert.equal((await hiddenAds.json()).items.some((item: { id: string }) => item.id === adId), false);
 
-        const settingsBody = { visitorCounterEnabled: true, visitorCounterLabel: "زيارات الاختبار", visitorBaseline: 0, visitorBaselineVerified: false, visitorBaselineEvidence: null, visitorBaselineAsOf: null };
+        const settingsBody = { visitorCounterEnabled: true, visitorCounterLabel: "زيارات الاختبار", visitorStartingValue: 0 };
         const setSettings = (body: unknown, headers: Record<string, string> = {}) => fetch(`${origin}${ADMIN_PATH}/api/settings`, { method: "PATCH", headers: { origin, "Content-Type": "application/json", ...headers }, body: JSON.stringify(body) });
         assert.equal((await setSettings(settingsBody)).status, 401);
         assert.equal((await setSettings(settingsBody, { cookie })).status, 403);

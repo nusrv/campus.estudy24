@@ -1,15 +1,16 @@
 import "server-only";
 import { Prisma } from "@prisma/client";
 import { db } from "./db";
-import { DEFAULT_COUNTER_LABEL, publicBaseline } from "./visitor-policy";
+import { DEFAULT_COUNTER_LABEL } from "./visitor-policy";
+import { displayedVisits } from "../lib/visitor-counter";
 
 export async function visitorSummary() {
   const settings = await db.siteSettings.findUnique({ where: { id: "main" } });
   if (settings && !settings.visitorCounterEnabled) return { enabled: false as const };
   const aggregate = await db.visitorDaily.aggregate({ _sum: { visits: true } });
   const tracked = aggregate._sum.visits || 0;
-  const baseline = settings ? publicBaseline(settings) : 0;
-  return { enabled: true as const, label: settings?.visitorCounterLabel || DEFAULT_COUNTER_LABEL, count: tracked + baseline, includes_verified_baseline: baseline > 0 };
+  const startingValue = settings?.visitorStartingValue || 0;
+  return { enabled: true as const, label: settings?.visitorCounterLabel || DEFAULT_COUNTER_LABEL, count: displayedVisits(startingValue, tracked), includes_starting_value: startingValue > 0 };
 }
 
 export async function claimVisit(key: string, now: Date) {

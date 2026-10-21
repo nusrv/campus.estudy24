@@ -18,6 +18,3 @@ export function readVisitorCookie(cookie: string, secret: string, now = Date.now
   if (issued > now || now - issued >= VISIT_WINDOW_SECONDS * 1000 || !constantEqual(match[3], tokenDigest(`visitor-cookie:${match[1]}.${match[2]}`, secret))) return null;
   return { nonce: match[1], issued };
 }
-export function publicBaseline(settings: { visitorBaseline: number; visitorBaselineVerified: boolean; visitorBaselineEvidence: string | null; visitorBaselineAsOf: Date | null; trackingStartedAt: Date }) {
-  return settings.visitorBaseline > 0 && settings.visitorBaselineVerified && (settings.visitorBaselineEvidence?.trim().length || 0) >= 10 && settings.visitorBaselineAsOf && settings.visitorBaselineAsOf <= settings.trackingStartedAt ? settings.visitorBaseline : 0;
-}

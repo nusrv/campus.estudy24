@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { adSchema, eventSchema, platformPostSchema, settingsSchema } from "../src/server/validation.ts";
 import { adAudience, platformVisibility, universityContentScope } from "../src/server/content-policy.ts";
-import { obviousBot, publicBaseline, readVisitorCookie, visitorCookie, VISIT_WINDOW_SECONDS } from "../src/server/visitor-policy.ts";
+import { obviousBot, readVisitorCookie, visitorCookie, VISIT_WINDOW_SECONDS } from "../src/server/visitor-policy.ts";
 import { dateRange } from "../src/lib/portal.ts";
 
 const secret = "test-only-visitor-secret-".repeat(3);
@@ -27,17 +27,10 @@ test("advertisements support multiple placements while preserving legacy single-
   assert.deepEqual(adAudience(), { global: true });
   assert.ok(JSON.stringify(adAudience("uqu")).includes('"slug":"uqu"'));
 });
-test("historical baseline is zero unless verified with evidence and a non-overlapping cutoff", () => {
-  const base = { visitorCounterEnabled: true, visitorCounterLabel: "زيارات البوابة", visitorBaseline: 0, visitorBaselineVerified: false, visitorBaselineEvidence: null, visitorBaselineAsOf: null };
-  assert.ok(settingsSchema.safeParse(base).success);
-  assert.equal(settingsSchema.safeParse({ ...base, visitorBaseline: 1200 }).success, false);
-  const evidence = { ...base, visitorBaseline: 1200, visitorBaselineVerified: true, visitorBaselineEvidence: "تقرير زيارات موثّق من نظام الإحصاءات السابق", visitorBaselineAsOf: "2026-10-01T00:00:00Z" };
-  assert.ok(settingsSchema.safeParse(evidence).success);
-  const stored = { ...evidence, visitorBaselineAsOf: new Date(evidence.visitorBaselineAsOf), trackingStartedAt: new Date("2026-10-20T00:00:00Z") };
-  assert.equal(publicBaseline(stored), 1200);
-  assert.equal(publicBaseline({ ...stored, visitorBaselineVerified: false }), 0);
-  assert.equal(publicBaseline({ ...stored, visitorBaselineEvidence: null }), 0);
-  assert.equal(publicBaseline({ ...stored, visitorBaselineAsOf: new Date("2026-11-01T00:00:00Z") }), 0);
+test("starting value is independent of recorded visits and validated with Arabic errors", () => {
+  assert.ok(settingsSchema.safeParse({ visitorStartingValue: 200000 }).success);
+  for (const value of [-1, 1.5, 2147483648, "200000"]) assert.equal(settingsSchema.safeParse({ visitorStartingValue: value }).success, false);
+  assert.equal(settingsSchema.safeParse({ visitorStartingValue: 0, visitorBaselineVerified: true }).success, false);
 });
 test("visitor cookies are authenticated, expire, and reject tampering and future issue dates", () => {
   const nonce = randomUUID();

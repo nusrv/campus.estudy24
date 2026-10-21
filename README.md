@@ -1,7 +1,9 @@
 # eStudy24 Campus
 
+Current university/n8n/counter release: [Plesk migration and explicit production seed](docs/INTEGRATIONS.md), [verification results](docs/INTEGRATIONS-VERIFICATION.md).
+
 Production deployment: [Plesk setup, browser owner provisioning and release workflow](docs/PLESK.md).
-Current checks: [Plesk/admin release verification](docs/PLESK-VERIFICATION.md).
+Administrator release checks: [Plesk/admin release verification](docs/PLESK-VERIFICATION.md).
 
 An Arabic university life portal for `campus.estudy24.com`, built on the approved design system and existing Next.js/PostgreSQL backend. See [phase-three setup and features](docs/CAMPUS.md), [current verification results](docs/CAMPUS-VERIFICATION.md), and the [backend foundation](docs/BACKEND.md).
 

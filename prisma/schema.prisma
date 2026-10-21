@@ -78,6 +78,7 @@ model University {
   programs    Program[]
   ads         AdvertisementUniversity[]
   links       ManagedLink[]
+  apiKeys     UniversityApiKey[]
 }
 
 model ArticleCategory {
@@ -279,11 +280,22 @@ model SiteSettings {
   visitorCounterEnabled    Boolean @default(true)
   visitorCounterLabel      String @default("زيارات مجتمعنا الجامعي")
   visitorBaseline          Int @default(0)
+  visitorStartingValue     Int @default(0)
   visitorBaselineVerified  Boolean @default(false)
   visitorBaselineEvidence  String?
   visitorBaselineAsOf      DateTime?
   trackingStartedAt        DateTime @default(now())
   updatedAt                DateTime @updatedAt
+}
+
+model UniversityApiKey {
+  id String @id @default(cuid())
+  universityId String
+  university University @relation(fields: [universityId], references: [id], onDelete: Restrict)
+  keyHash String @unique
+  createdAt DateTime @default(now())
+  revokedAt DateTime?
+  @@index([universityId, createdAt])
 }
 
 model VisitorDaily {

@@ -1,5 +1,7 @@
 # eStudy24 Campus — phase three
 
+The university/key/counter release supersedes the older visitor-baseline setup below. Use [INTEGRATIONS.md](INTEGRATIONS.md) for current migration, seed, counter and n8n instructions.
+
 Website identity: **campus.estudy24.com**. This phase extends the existing project. It retains the approved IBM Plex Sans Arabic typography, RTL direction, semantic colors, reusable UI components, private administration route, PostgreSQL/Prisma architecture, and n8n ingestion service.
 
 ## Public portal

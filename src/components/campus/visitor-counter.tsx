@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { UsersRound } from "lucide-react";
 import { Card } from "@/components/ui/card";
 
-type Summary = { enabled: boolean; count?: number; label?: string; includes_verified_baseline?: boolean };
+type Summary = { enabled: boolean; count?: number; label?: string; includes_starting_value?: boolean };
 export function VisitorCounter() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [display, setDisplay] = useState(0);
@@ -40,5 +40,5 @@ export function VisitorCounter() {
     return () => cancelAnimationFrame(frame);
   }, [summary?.count]);
   if (summary && !summary.enabled) return null;
-  return <Card className="mt-10 flex flex-wrap items-center justify-between gap-5 p-6"><div className="flex items-center gap-4"><span className="flex size-12 items-center justify-center rounded-xl bg-accent text-primary"><UsersRound className="size-5" /></span><div><h2 className="text-base font-medium">{summary?.label || "زيارات مجتمعنا الجامعي"}</h2><p className="mt-1 text-xs leading-7 text-secondary-foreground">{summary?.includes_verified_baseline ? "زيارات مسجّلة مع رصيد تاريخي موثّق." : "نموّ نعتز به، وزيارات تُسجّل باحترام الخصوصية."}</p></div></div><div>{error ? <span className="text-xs text-secondary-foreground">يتعذّر عرض العدد حاليًا</span> : summary?.count !== undefined ? <span dir="ltr" aria-label={`${summary.count.toLocaleString("ar-SA")} زيارة`} className="text-3xl font-medium tabular-nums text-primary">{display.toLocaleString("ar-SA")}</span> : <span className="block h-9 w-24 animate-pulse rounded-lg bg-muted" aria-label="جارٍ تحميل عدد الزيارات" />}</div></Card>;
+  return <Card className="mt-10 flex flex-wrap items-center justify-between gap-5 p-6"><div className="flex items-center gap-4"><span className="flex size-12 items-center justify-center rounded-xl bg-accent text-primary"><UsersRound className="size-5" /></span><div><h2 className="text-base font-medium">{summary?.label || "زيارات مجتمعنا الجامعي"}</h2><p className="mt-1 text-xs leading-7 text-secondary-foreground">{summary?.includes_starting_value ? "يشمل قيمة ابتدائية يحددها مسؤول البوابة، إضافةً إلى الزيارات المسجّلة." : "نموّ نعتز به، وزيارات تُسجّل باحترام الخصوصية."}</p></div></div><div>{error ? <span className="text-xs text-secondary-foreground">يتعذّر عرض العدد حاليًا</span> : summary?.count !== undefined ? <span dir="ltr" aria-label={`${summary.count.toLocaleString("en-US")} زيارة`} className="text-3xl font-medium tabular-nums text-primary">{display.toLocaleString("en-US")}</span> : <span className="block h-9 w-24 animate-pulse rounded-lg bg-muted" aria-label="جارٍ تحميل عدد الزيارات" />}</div></Card>;
 }

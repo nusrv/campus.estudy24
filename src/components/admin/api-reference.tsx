@@ -1,0 +1,44 @@
+"use client";
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { ingestionExample } from '@/lib/ingestion-example';
+import { CONTROL_PATH } from './config';
+const fields = [
+  ['university_slug', 'مطلوب', 'الاسم المختصر المطابق لجامعة المفتاح.'],
+  ['source_id', 'مطلوب', 'معرّف الخبر الأصلي الثابت؛ نص حتى 200 حرف أو عدد صحيح غير سالب.'],
+  ['source_url', 'مطلوب', 'رابط HTTP(S) الأصلي من نفس اسم المضيف في مصدر الاستيراد المفعّل.'],
+  ['title', 'مطلوب', 'عنوان نصي من 1 إلى 500 حرف.'],
+  ['source_key', 'اختياري', 'مفتاح مصدر الاستيراد؛ افتراضيًا university_slug-rss.'],
+  ['summary / description / content_text', 'اختياري', 'نصوص بطول أقصى 5,000 / 10,000 / 100,000 حرف. لا يُعرض HTML كتعليمات برمجية.'],
+  ['published_at', 'اختياري', 'تاريخ النشر الأصلي ISO 8601 مع المنطقة الزمنية، أو null. ليس موعد الفعالية.'],
+  ['image_urls / pdf_urls / registration_links', 'اختياري', 'مصفوفات روابط HTTP(S)؛ 20 رابطًا لكل حقل. المرفقات تبقى روابط خارجية مع نسبتها للمصدر ولا تُنزّل تلقائيًا.'],
+  ['category', 'اختياري', 'اسم مختصر، افتراضيًا general. لا تمرّر status أو university_id أو حقول الإدارة.'],
+] as const;
+export function ApiReference({ origin, universities }: { origin: string; universities: { slug: string; name: string; websiteUrl: string | null }[] }) {
+  const first = universities[0];
+  const [endpoint, setEndpoint] = useState('articles');
+  const [payload, setPayload] = useState(JSON.stringify(ingestionExample(first?.slug || 'uqu', first?.websiteUrl || 'https://uqu.edu.sa'), null, 2));
+  const [key, setKey] = useState('');
+  const [result, setResult] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+  async function copy(value: string) { try { await navigator.clipboard.writeText(value); setMessage('تم نسخ المثال دون أي مفتاح سري.'); } catch { setMessage('تعذّر النسخ. حدّد المثال وانسخه يدويًا.'); } }
+  async function execute(event: React.FormEvent) {
+    event.preventDefault(); setResult('');
+    if (!confirm('سيُرسل هذا الطلب إلى قاعدة البيانات الحالية وقد ينشئ أخبارًا بانتظار المراجعة. هل استبدلت بيانات المثال وتريد المتابعة؟')) return;
+    setBusy(true);
+    try {
+      JSON.parse(payload);
+      const response = await fetch(`/api/ingest/${endpoint}`, { method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` }, body: payload });
+      setResult(`HTTP ${response.status}\n${JSON.stringify(await response.json(), null, 2)}`);
+    } catch { setResult('تعذّر الإرسال. تحقّق من JSON والاتصال.'); }
+    finally { setKey(''); setBusy(false); }
+  }
+  return <div className="space-y-6"><h1 className="text-2xl font-medium">وثائق API والتكاملات</h1><Card className="space-y-5 p-6"><p className="text-sm leading-8">الاستيراد مستقل عن جلسة الإدارة. استخدم مفتاح الجامعة في ترويسة Authorization: Bearer. المفاتيح تديرها حسابات المالك من تكامل الجامعة. المفتاح لا يمنح أي صلاحيات إدارية، ولا يقبل الاستيراد لجامعة أخرى.</p><div className="flex flex-wrap gap-4 text-sm text-primary"><a href={`${CONTROL_PATH}/api/integrations/openapi`} download="campus-ingestion.openapi.json">تنزيل OpenAPI 3.1</a><a href={`${CONTROL_PATH}/api/integrations/n8n`} download="campus-uqu-n8n.json">تنزيل سير عمل n8n قابل للاستيراد</a></div><p className="text-sm leading-7">المساران: <code dir="ltr">POST {origin}/api/ingest/articles</code> و<code dir="ltr">POST {origin}/api/ingest/batch</code>. الدفعة تكون بالشكل <code dir="ltr">{'{"articles": [...]}'}</code> وتضم 1–50 خبرًا. الحد الأقصى للطلب 1 MiB. الحد 60 طلبًا في الدقيقة لكل مفتاح ولكل حاوية عميل؛ الطلبات غير الصحيحة تخضع أيضًا لحد مصادقة.</p></Card>
+    <Card className="overflow-auto"><table className="w-full text-start text-sm"><thead><tr className="bg-muted"><th className="p-4 text-start">الحقل</th><th className="p-4 text-start">الوجوب</th><th className="p-4 text-start">التفاصيل</th></tr></thead><tbody>{fields.map(([name, required, detail]) => <tr key={name} className="border-t border-border"><td className="p-4"><code dir="ltr">{name}</code></td><td className="p-4">{required}</td><td className="p-4 leading-8">{detail}</td></tr>)}</tbody></table></Card>
+    <Card className="space-y-4 p-6"><h2 className="text-lg font-medium">المعرّفات والاستجابة وإعادة المحاولة</h2><p className="text-sm leading-8">منع التكرار يعتمد على مصدر الاستيراد ومعرّف الخبر الأصلي معًا. لا تستخدم وقت التنفيذ أو رقمًا عشوائيًا كمعرّف للخبر. تكرار الطلب يعيد unchanged أو updated بدل إنشاء نسخة ثانية. التغييرات اليدوية وحالة النشر محفوظة. جميع الأخبار الجديدة تبدأ pending_review.</p><pre dir="ltr" className="overflow-auto rounded-xl bg-muted p-4 text-xs leading-6">{'{"request_id":"UUID","counts":{"created":1,"updated":0,"unchanged":0,"rejected":0,"failed":0},"results":[{"index":0,"outcome":"created","article_id":"ARTICLE_ID"}]}'}</pre><p className="text-sm leading-8">201 إنشاء خبر، 200 تحديث/دون تغيير أو دفعة ناجحة، 207 دفعة تحتوي رفضًا أو فشلًا. 401 مفتاح ناقص/غير صالح/ملغى، 403 نطاق جامعة غير مطابق، 413 حجم زائد، 415 نوع محتوى غير JSON، 422 بيانات أو مصدر غير صالح، 429 تجاوز المعدّل، 503 تعذّر الخدمة. في الدفعات افحص results لكل خبر، ولا تعتمد على رمز HTTP وحده.</p><p className="text-sm leading-8">أعد فقط الأخبار failed عند 503 أو 429 أو انقطاع الاتصال، مع نفس المعرّفات وتراجع زمني (مثل 2 ثم 5 ثم 15 ثانية). عالج rejected قبل إعادة إرساله. عند 207 احتفظ بنتائج الأخبار الناجحة وأعد الأخبار الفاشلة فقط. لا تعاود 401 أو 403 قبل إصلاح المفتاح أو النطاق.</p><p className="text-sm leading-8">استورد سير العمل المرفق في n8n. السلسلة: RSS Feed → Transform/Normalize → Authenticated HTTP Request. اضبط بيانات اعتماد Header Auth محليًا (اسم الترويسة Authorization وقيمتها Bearer ثم المفتاح). المثال غير مفعّل ولا يحتوي سرًا؛ المصدر الوحيد المحدد فيه هو RSS أم القرى. لا يلزم أو يُنفّذ أي جلب RSS في Next.js.</p></Card>
+    <Card className="space-y-5 p-6"><h2 className="text-lg font-medium">مرجع تفاعلي — إرسال اختباري صريح</h2><p className="text-sm leading-7 text-secondary-foreground">هذا الطلب حقيقي وقد يكتب محتوى للمراجعة. استبدل بيانات المثال بخبر أصلي، أو استخدم بيئة اختبار. لا يُنشر أي خبر تلقائيًا. لا نحفظ المفتاح في التخزين المحلي أو عنوان الصفحة.</p><form onSubmit={execute} className="space-y-4"><label className="block text-sm">الجامعة<select className="public-select mt-2 w-full" defaultValue={first?.slug} onChange={event => { const university = universities.find(u => u.slug === event.target.value); if (university) { const example = ingestionExample(university.slug, university.websiteUrl || 'https://example.edu.sa'); setPayload(JSON.stringify(endpoint === 'batch' ? { articles: [example] } : example, null, 2)); } }}>{universities.map(university => <option key={university.slug} value={university.slug}>{university.name}</option>)}</select></label><label className="block text-sm">المسار<select className="public-select mt-2 w-full" value={endpoint} onChange={event => { const next = event.target.value; try { const body = JSON.parse(payload); setPayload(JSON.stringify(next === 'batch' ? { articles: [body.articles?.[0] || body] } : body.articles?.[0] || body, null, 2)); } catch { /* retain invalid draft for correction */ } setEndpoint(next); }}><option value="articles">POST /api/ingest/articles</option><option value="batch">POST /api/ingest/batch</option></select></label><label className="block text-sm">JSON<textarea required dir="ltr" rows={15} className="mt-2 w-full rounded-xl border border-border p-4 text-xs leading-6" value={payload} onChange={event => setPayload(event.target.value)} /></label><Button type="button" variant="outline" size="sm" onClick={() => copy(payload)}>نسخ JSON</Button>{message && <p role="status" className="text-sm">{message}</p>}<label className="block text-sm">مفتاح الجامعة للاختبار<Input type="password" required value={key} autoComplete="off" dir="ltr" onChange={event => setKey(event.target.value)} className="mt-2" /></label><Button disabled={busy}>إرسال طلب اختباري</Button></form>{result && <pre role="status" dir="ltr" className="overflow-auto rounded-xl bg-muted p-4 text-xs leading-6">{result}</pre>}</Card>
+  </div>;
+}

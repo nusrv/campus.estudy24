@@ -57,9 +57,10 @@ export const categorySchema = z.object({ name: text(100).min(1), slug }).strict(
 export const platformType = z.enum(["platform_news", "blog", "guide", "topic"]);
 export const platformPostActionSchema = z.object({ action: z.literal("restore") }).strict();
 export const platformPostSchema = z.object({ slug, type: platformType.default("platform_news"), title: text(500).min(1), summary: text(5000).default(""), content: text(100000).default(""), coverImageUrl: optionalMedia, categoryId: id.nullable().optional(), featured: z.boolean().default(false), featurePriority: z.number().int().min(-1000).max(1000).default(0), seoTitle: text(150).nullable().optional(), seoDescription: text(320).nullable().optional(), status: status.default("pending_review"), visible: z.boolean().default(true) }).strict();
-export const settingsSchema = z.object({ visitorCounterEnabled: z.boolean(), visitorCounterLabel: text(120).min(1), visitorBaseline: z.number().int().min(0).max(2147483647), visitorBaselineVerified: z.boolean(), visitorBaselineEvidence: text(2000).nullable(), visitorBaselineAsOf: date.nullable() }).strict().superRefine((value, ctx) => {
-  if (value.visitorBaseline > 0 && (!value.visitorBaselineVerified || !value.visitorBaselineAsOf || (value.visitorBaselineEvidence?.trim().length || 0) < 10)) ctx.addIssue({ code: "custom", path: ["visitorBaseline"], message: "Historical visits require verification, documentary evidence, and a cutoff before tracking began. Order counts are not visits." });
-});
+export const settingsSchema = z.object({
+  visitorStartingValue: z.number({ error: 'أدخل قيمة ابتدائية رقمية صحيحة.' }).int('يجب إدخال عدد صحيح دون كسور.').min(0, 'القيمة الابتدائية لا يمكن أن تكون سالبة.').max(2147483647, 'الحد الأقصى للقيمة الابتدائية هو 2,147,483,647.'),
+  visitorCounterEnabled: z.boolean().optional(), visitorCounterLabel: text(120).min(1).optional(),
+}).strict();
 
 export const pageSchema = z.object({ page: z.coerce.number().int().min(1).max(100000).default(1), page_size: z.coerce.number().int().min(1).max(100).default(20), university: slug.optional(), category: slug.optional(), status: status.optional(), search: text(200).optional(), from: date.optional(), to: date.optional(), deleted: z.enum(["true", "false"]).optional(), placement: placement.optional(), type: platformType.optional(), kind: z.enum(["event", "academic_date", "registration", "examination", "general", "official", "academic_calendar", "timetable", "student_service", "admission", "learning_resource"]).optional(), scope: z.enum(["homepage", "university"]).optional(), region: text(100).optional(), featured: z.enum(["true", "false"]).optional() });
 export function pagination(search: URLSearchParams) {

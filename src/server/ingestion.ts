@@ -7,15 +7,26 @@ import { clientKey, rateLimit } from "./rate-limit";
 import { HttpError, MAX_BATCH_SIZE, enforceApiKey, readJson } from "./security";
 import { ingestArticleSchema, type IngestArticle } from "./validation";
 import { fingerprint, incomingFields } from "./ingestion-policy";
+import { authenticateUniversityKey } from "./university-keys";
+import { requireUniversityScope } from "./integration-policy";
+type UniversityCredential = { keyId: string; universityId: string; universitySlug: string };
 
 export type IngestResult = { index: number; outcome: "created" | "updated" | "unchanged" | "rejected" | "failed"; article_id?: string; error?: { code: string; fields?: { path: string; message: string }[] } };
 
-async function applyImport(input: IngestArticle, requestId: string, index: number): Promise<IngestResult> {
+async function applyImport(input: IngestArticle, requestId: string, index: number, credential?: UniversityCredential): Promise<IngestResult> {
   for (let attempt = 0; attempt < 4; attempt++) {
     try {
       return await db.$transaction(async tx => {
+        if (credential) {
+          // Hold a shared key-row lock until import commits; revoke/rotate waits for in-flight work.
+          await tx.$queryRaw`SELECT "id" FROM "UniversityApiKey" WHERE "id" = ${credential.keyId} FOR SHARE`;
+          const activeKey = await tx.universityApiKey.findUnique({ where: { id: credential.keyId } });
+          if (!activeKey || activeKey.revokedAt || activeKey.universityId !== credential.universityId) throw new HttpError(401, 'UNAUTHORIZED', 'مفتاح API ملغى.');
+          requireUniversityScope(input.university_slug, credential.universitySlug);
+        }
         const source = await tx.ingestionSource.findUnique({ where: { key: input.source_key }, include: { university: true } });
         if (!source || !source.enabled || !source.university.enabled || source.university.slug !== input.university_slug) throw new HttpError(422, "UNKNOWN_SOURCE", "Source or university is not enabled.");
+        if (credential && source.universityId !== credential.universityId) throw new HttpError(403, 'UNIVERSITY_SCOPE_MISMATCH', 'المصدر لا يتبع الجامعة المخوّلة.');
         if (new URL(source.url).hostname !== new URL(input.source_url).hostname) throw new HttpError(422, "SOURCE_HOST_MISMATCH", "Article URL must belong to the configured source host.");
         const digest = fingerprint(input);
         const existing = await tx.article.findUnique({ where: { sourceId_originalArticleId: { sourceId: source.id, originalArticleId: input.source_id } } });
@@ -54,13 +65,13 @@ async function applyImport(input: IngestArticle, requestId: string, index: numbe
   throw new Error("Retry budget exhausted.");
 }
 
-export async function ingestRecord(raw: unknown, requestId: string, index: number): Promise<IngestResult> {
+export async function ingestRecord(raw: unknown, requestId: string, index: number, credential?: UniversityCredential): Promise<IngestResult> {
   const parsed = ingestArticleSchema.safeParse(raw);
   if (!parsed.success) {
     await db.ingestionLog.create({ data: { requestId, outcome: "rejected", errorCode: "VALIDATION_ERROR" } });
     return { index, outcome: "rejected", error: { code: "VALIDATION_ERROR", fields: parsed.error.issues.map(issue => ({ path: issue.path.join("."), message: issue.message })) } };
   }
-  try { return await applyImport(parsed.data, requestId, index); }
+  try { return await applyImport(parsed.data, requestId, index, credential); }
   catch (error) {
     const rejected = error instanceof HttpError;
     const code = rejected ? error.code : "INGESTION_FAILED";
@@ -73,17 +84,27 @@ export async function handleIngestion(request: Request, batch: boolean) {
   const requestId = randomUUID();
   let authenticated = false;
   try {
-    enforceApiKey(request.headers, process.env.INGEST_API_KEY || "");
+    await rateLimit('ingest-auth', clientKey(request.headers), 120, 60);
+    const bearer = request.headers.get('authorization')?.replace(/^Bearer /, '') || '';
+    let credential: UniversityCredential | undefined;
+    if (request.headers.get('authorization')?.startsWith('Bearer campus_uak_')) credential = await authenticateUniversityKey(db, bearer);
+    else if ((process.env.INGEST_API_KEY || '').length >= 32) enforceApiKey(request.headers, process.env.INGEST_API_KEY!);
+    else throw new HttpError(401, 'UNAUTHORIZED', 'مفتاح API صالح مطلوب للاستيراد.');
     authenticated = true;
     await rateLimit("ingest", clientKey(request.headers), 60, 60);
+    if (credential) await rateLimit('ingest-key', credential.keyId, 60, 60);
     const body = await readJson(request);
     let records: unknown[];
     if (batch) {
       if (!body || typeof body !== "object" || Array.isArray(body) || Object.keys(body).some(key => key !== "articles") || !("articles" in body) || !Array.isArray(body.articles) || body.articles.length < 1 || body.articles.length > MAX_BATCH_SIZE) throw new HttpError(422, "INVALID_BATCH", `Use {articles: [...]} with 1–${MAX_BATCH_SIZE} records.`);
       records = body.articles;
     } else records = [body];
+    // Reject mixed-university batches before importing any records.
+    if (credential) for (const record of records) {
+      if (record && typeof record === 'object' && 'university_slug' in record) requireUniversityScope(record.university_slug, credential.universitySlug);
+    }
     const results: IngestResult[] = [];
-    for (const [index, record] of records.entries()) results.push(await ingestRecord(record, requestId, index));
+    for (const [index, record] of records.entries()) results.push(await ingestRecord(record, requestId, index, credential));
     const counts = { created: 0, updated: 0, unchanged: 0, rejected: 0, failed: 0 };
     results.forEach(result => { counts[result.outcome]++; });
     const status = batch ? (counts.failed || counts.rejected ? 207 : 200) : counts.failed ? 503 : counts.rejected ? 422 : counts.created ? 201 : 200;
