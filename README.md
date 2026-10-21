@@ -1,5 +1,7 @@
 # eStudy24 Campus
 
+Bulk news deletion: [permissions, safeguards, verification and Plesk update](docs/BULK-NEWS.md).
+
 University news categories: [approved taxonomy, safe seed and Plesk release](docs/NEWS-CATEGORIES.md).
 
 Current content-automation release: [migration, logo seed, publication policy and n8n changes](docs/CONTENT-AUTOMATION.md), [verification](docs/CONTENT-AUTOMATION-VERIFICATION.md).

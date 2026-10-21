@@ -4,6 +4,7 @@ import { db } from "./db";
 import { HttpError } from "./security";
 import { adSchema, articlePatchSchema, articleSchema, categorySchema, eventSchema, linkSchema, pagination, platformPostActionSchema, platformPostSchema, programSchema, sourceSchema, universitySchema } from "./validation";
 import { changedEditorialFields } from "./ingestion-policy";
+import { bulkArticleDeleteSchema } from './bulk-article-validation';
 
 export const RESOURCES = ["universities", "articles", "platform_posts", "ads", "links", "events", "programs", "sources", "categories", "logs", "audit"] as const;
 export type Resource = typeof RESOURCES[number];
@@ -75,8 +76,8 @@ export async function articleDetails(id: string) {
   return { ...item, imageUrls: item.media.filter(m => m.kind === "image").map(m => m.url), pdfUrls: item.media.filter(m => m.kind === "pdf").map(m => m.url), registrationLinks: item.registrationLinks.map(m => m.url) };
 }
 
-export async function saveResource(resource: Resource, raw: unknown, administratorId: string, recordId?: string) {
-  return db.$transaction(async tx => {
+export async function saveResource(resource: Resource, raw: unknown, administratorId: string, recordId?: string, transaction?: Prisma.TransactionClient) {
+  const save = async (tx: Prisma.TransactionClient) => {
     let item: { id: string };
     if (resource === "platform_posts") {
       const old = recordId ? await tx.platformPost.findUniqueOrThrow({ where: { id: recordId } }) : null;
@@ -162,7 +163,33 @@ export async function saveResource(resource: Resource, raw: unknown, administrat
     } else throw new HttpError(405, "READ_ONLY", "This resource is read-only.");
     await tx.auditLog.create({ data: { administratorId, action: recordId ? "update" : "create", entity: resource, entityId: item.id, details: { fields: Object.keys(raw as object) } } });
     return item;
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 15000 });
+  };
+  return transaction ? save(transaction) : db.$transaction(save, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 15000 });
+}
+
+export async function bulkDeleteArticles(raw: unknown, administratorId: string) {
+  const { ids } = bulkArticleDeleteSchema.parse(raw);
+  const ordered = [...ids].sort();
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await db.$transaction(async tx => {
+        const actor = await tx.administrator.findUnique({ where: { id: administratorId } });
+        if (!actor?.active || actor.role !== 'owner') throw new HttpError(403, 'FORBIDDEN', 'حذف الأخبار متاح للمالك فقط.');
+        const count = await tx.article.count({ where: { id: { in: ordered }, deletedAt: null } });
+        if (count !== ordered.length) throw new HttpError(409, 'STALE_SELECTION', 'تغيّر التحديد أو حُذف أحد الأخبار مسبقًا. لم يُحذف أي خبر من هذا الطلب. حدّث القائمة وأعد التحديد.');
+        // The identical individual-delete path, all inside one transaction: any error rolls back every row and audit entry.
+        for (const id of ordered) await saveResource('articles', { action: 'soft_delete' }, administratorId, id, tx);
+        return { ids, deleted_count: ids.length };
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') {
+        if (attempt < 2) continue;
+        throw new HttpError(409, 'CONCURRENT_UPDATE', 'تعذّر الحذف بسبب تحديث متزامن. لم يُحذف أي خبر من هذا الطلب. حدّث القائمة وحاول مجددًا.');
+      }
+      throw error;
+    }
+  }
+  throw new HttpError(503, 'DELETE_FAILED', 'تعذّر إتمام عملية الحذف.');
 }
 
 export async function deleteResource(resource: Resource, id: string, administratorId: string) {

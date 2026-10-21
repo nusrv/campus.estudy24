@@ -195,6 +195,69 @@ test('PostgreSQL + HTTP + browser: publication policies, structured ingestion, T
         } } finally { await browser.close(); }
       }
     });
+    await t.test('bulk deletion enforces owner/CSRF, validates exact bounded IDs, rolls back stale selections and survives n8n reimport', async () => {
+      const path = `${ADMIN_PATH}/api/articles/bulk-delete`;
+      await db.university.update({ where: { id: university.id }, data: { autoPublishNews: true } });
+      const batch = [0, 1, 2].map(index => ({ ...news, source_id: `bulk-${index}`, title: `أخبار اختبار الحذف الجماعي ${index}` }));
+      const imported = await (await request('/api/ingest/batch', 'POST', { articles: batch }, headers)).json(); assert.equal(imported.counts.created, 3);
+      const ids = imported.results.map((result: { article_id: string }) => result.article_id) as string[], selected = ids.slice(0, 2);
+      assert.equal((await request(path, 'POST', { ids: selected })).status, 401);
+      assert.equal((await request(path, 'POST', { ids: selected }, headers)).status, 401);
+      assert.equal((await request(path, 'POST', { ids: selected }, editorAuth)).status, 403);
+      assert.equal((await request(path, 'POST', { ids: selected }, { cookie: auth.cookie })).status, 403);
+      assert.equal((await request(path, 'POST', { ids: selected }, { ...auth, origin: 'https://attacker.invalid' })).status, 403);
+      for (const body of [{ ids: [] }, { ids: [ids[0], ids[0]] }, { ids: ['../all'] }, { ids: Array.from({ length: 101 }, (_, i) => `too-many-${i}`) }, { ids: selected, all: true }]) assert.equal((await request(path, 'POST', body, auth)).status, 422);
+      const editsBefore = await db.articleEdit.count(); const auditsBefore = await db.auditLog.count();
+      const invalid = await request(path, 'POST', { ids: [ids[0], 'missing-article'] }, auth); assert.equal(invalid.status, 409); assert.equal((await invalid.json()).error.code, 'STALE_SELECTION');
+      assert.equal(await db.article.count({ where: { id: { in: ids }, deletedAt: null } }), 3); assert.equal(await db.articleEdit.count(), editsBefore); assert.equal(await db.auditLog.count(), auditsBefore);
+      const universityBefore = await db.university.findUniqueOrThrow({ where: { id: university.id } }), adsBefore = await db.advertisement.count();
+      const deleted = await request(path, 'POST', { ids: selected }, auth); assert.equal(deleted.status, 200); assert.deepEqual(await deleted.json(), { ids: selected, deleted_count: 2 });
+      assert.equal(await db.article.count({ where: { id: { in: selected }, deletedAt: { not: null }, publicationLocked: true } }), 2);
+      assert.equal((await db.article.findUniqueOrThrow({ where: { id: ids[2] } })).deletedAt, null);
+      assert.equal(await db.articleEdit.count(), editsBefore + 2); assert.equal(await db.auditLog.count(), auditsBefore + 2);
+      assert.equal((await request(path, 'POST', { ids: selected }, auth)).status, 409);
+      assert.equal(await db.articleEdit.count(), editsBefore + 2);
+      const repeated = await (await request('/api/ingest/batch', 'POST', { articles: batch.map(item => ({ ...item, title: item.title + ' تحديث المصدر' })) }, headers)).json(); assert.equal(repeated.counts.created, 0);
+      assert.equal(await db.article.count({ where: { sourceId: source.id, originalArticleId: { in: batch.map(item => item.source_id) } } }), 3);
+      assert.equal(await db.article.count({ where: { id: { in: selected }, deletedAt: { not: null } } }), 2);
+      for (const id of selected) assert.equal((await request(`/api/news/${id}`)).status, 404);
+      assert.equal((await request(`/api/news/${ids[2]}`)).status, 200);
+      assert.equal((await request(`${ADMIN_PATH}/api/articles/${selected[0]}`, 'PATCH', { action: 'restore' }, auth)).status, 200); assert.equal((await request(`/api/news/${selected[0]}`)).status, 200);
+      assert.deepEqual(await db.university.findUniqueOrThrow({ where: { id: university.id } }), universityBefore); assert.equal(await db.advertisement.count(), adsBefore);
+    });
+    await t.test('desktop/mobile selection, current-page select all, deselection, confirmation, failures and successful bulk deletion', { skip: !existsSync(executable) }, async () => {
+      const browser = await chromium.launch({ executablePath: executable, headless: true });
+      try {
+        for (const width of [1440, 390]) {
+          const marker = `BULKUI-${suffix}-${width}`;
+          await db.article.createMany({ data: [1, 2, 3].map(index => ({ universityId: university.id, title: `${marker} خبر ${index}`, origin: 'manual' as const, discoveredAt: new Date(Date.now() + index), status: 'published' as const, publishedAt: new Date() })) });
+          const fixtures = await db.article.findMany({ where: { universityId: university.id, title: { startsWith: marker } }, orderBy: [{ discoveredAt: 'desc' }, { id: 'desc' }] });
+          const context = await browser.newContext({ viewport: { width, height: 900 } });
+          const [name, value] = auth.cookie.split('='); await context.addCookies([{ name, value, url: origin + ADMIN_PATH }]);
+          const page = await context.newPage(), url = `${origin}${ADMIN_PATH}/articles?search=${marker}&page_size=2`;
+          await page.goto(url); const all = page.getByRole('checkbox', { name: 'تحديد الكل', exact: true }), rows = page.getByRole('checkbox', { name: /^تحديد الخبر:/ });
+          assert.equal(await rows.count(), 2); assert.equal(await page.getByRole('button', { name: /^حذف المحدد/ }).count(), 0);
+          await all.check(); assert.equal(await page.getByRole('button', { name: 'حذف المحدد (2)', exact: true }).count(), 1);
+          await page.getByRole('button', { name: 'التالي', exact: true }).click(); await page.waitForURL('**page=2'); assert.equal(await rows.count(), 1); assert.equal(await rows.first().isChecked(), false);
+          await page.goto(url); await rows.first().check(); assert.equal(await all.evaluate(el => (el as HTMLInputElement).indeterminate), true); await rows.first().uncheck(); assert.equal(await all.isChecked(), false);
+          await all.check(); await all.uncheck(); assert.equal(await page.locator('input[type="checkbox"]:checked').count(), 0); await all.check();
+          page.once('dialog', async dialog => { assert.match(dialog.message(), /2/); await dialog.dismiss(); }); await page.getByRole('button', { name: 'حذف المحدد (2)', exact: true }).click();
+          assert.equal(await db.article.count({ where: { id: { in: fixtures.map(item => item.id) }, deletedAt: null } }), 3);
+          await page.route('**/api/articles/bulk-delete', route => route.abort());
+          page.once('dialog', dialog => dialog.accept()); await page.getByRole('button', { name: 'حذف المحدد (2)', exact: true }).click(); await page.getByRole('alert').filter({ hasText: 'تعذّر تأكيد نتيجة الحذف' }).waitFor();
+          assert.equal(await db.article.count({ where: { id: { in: fixtures.map(item => item.id) }, deletedAt: null } }), 3); assert.equal(await page.getByRole('button', { name: 'حذف المحدد (2)', exact: true }).count(), 1);
+          await page.unroute('**/api/articles/bulk-delete');
+          const response = page.waitForResponse(response => response.url().endsWith('/api/articles/bulk-delete') && response.request().method() === 'POST');
+          page.once('dialog', dialog => dialog.accept()); await page.getByRole('button', { name: 'حذف المحدد (2)', exact: true }).click(); assert.equal((await response).status(), 200);
+          await page.getByRole('status').filter({ hasText: 'تم نقل 2 خبرًا' }).waitFor(); await page.getByRole('status').filter({ hasText: 'الأخبار المحددة: 0' }).waitFor();
+          await page.waitForFunction(() => document.querySelectorAll('tbody input[type="checkbox"]').length === 1); assert.equal(await rows.first().isChecked(), false); assert.equal(await page.getByRole('button', { name: /^حذف المحدد/ }).count(), 0);
+          assert.equal(await db.article.count({ where: { id: { in: fixtures.slice(0, 2).map(item => item.id) }, deletedAt: { not: null } } }), 2); assert.equal((await db.article.findUniqueOrThrow({ where: { id: fixtures[2].id } })).deletedAt, null);
+          await page.goto(`${origin}${ADMIN_PATH}/articles?search=${marker}&deleted=true`); assert.equal(await page.getByRole('checkbox', { name: 'تحديد الكل', exact: true }).count(), 0);
+          await context.close();
+        }
+        const context = await browser.newContext(); const [name, value] = editorAuth.cookie.split('='); await context.addCookies([{ name, value, url: origin + ADMIN_PATH }]); const page = await context.newPage(); await page.goto(`${origin}${ADMIN_PATH}/articles`); assert.equal(await page.getByRole('checkbox', { name: 'تحديد الكل', exact: true }).count(), 0); await context.close();
+      } finally { await browser.close(); }
+    });
     await t.test('logo seed is repeatable and preserves uploaded logos and configured policies', async () => {
       const before = await db.university.findUniqueOrThrow({ where: { id: university.id } }); await seedUniversityLogos(db); await seedUniversityLogos(db);
       assert.deepEqual(await db.university.findUniqueOrThrow({ where: { id: university.id } }), before);
