@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     }
     const old = await session();
     if (old) await destroySession(old.id);
-    await createSession(administrator.id);
+    await createSession(administrator.id, administrator.passwordHash);
     await db.auditLog.create({ data: { administratorId: administrator.id, action: "login", entity: "authentication" } });
     return json({ ok: true });
   } catch (error) { return failure(error); }

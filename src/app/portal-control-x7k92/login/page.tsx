@@ -4,7 +4,11 @@ import { session } from "@/server/auth";
 import { ADMIN_PATH } from "@/server/security";
 import { Card, CardContent } from "@/components/ui/card";
 import { LoginForm } from "@/components/admin/login-form";
+import { db } from "@/server/db";
+import { bootstrapAvailable } from "@/server/administrator-service";
+import { AccountForm } from "@/components/admin/account-form";
 export default async function LoginPage() {
   if (await session()) redirect(ADMIN_PATH);
+  if (await bootstrapAvailable(db)) return <main className="flex min-h-dvh items-center justify-center px-5 py-12"><Card className="w-full max-w-md"><CardContent className="space-y-6 p-8"><h1 className="text-2xl font-medium">تهيئة إدارة eStudy24</h1><p className="text-sm leading-7 text-secondary-foreground">أنشئ حساب المالك الأول باستخدام رمز التهيئة المضاف في إعدادات الخادم. إذا لم يتوفر الرمز، فالتهيئة مغلقة.</p><AccountForm mode="setup" /></CardContent></Card></main>;
   return <main className="flex min-h-dvh items-center justify-center px-5 py-12"><Card className="w-full max-w-md"><CardContent className="space-y-7 p-8"><div><BookOpen className="mb-5 size-9 text-primary" /><h1 className="text-2xl font-medium">إدارة eStudy24</h1><p className="mt-3 text-sm leading-7 text-secondary-foreground">مساحة خاصة لإدارة المحتوى الجامعي.</p></div><LoginForm /><p className="border-t border-border pt-5 text-xs leading-6 text-secondary-foreground">هذه الواجهة مخصّصة للمشرفين المخوّلين فقط.</p></CardContent></Card></main>;
 }

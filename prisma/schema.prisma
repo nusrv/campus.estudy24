@@ -309,6 +309,22 @@ model Administrator {
   sessions     AdminSession[]
   audits       AuditLog[]
   edits        ArticleEdit[]
+  passwordResets AdminPasswordReset[]
+}
+
+model AdministrationBootstrap {
+  id String @id
+  completedAt DateTime @default(now())
+}
+
+model AdminPasswordReset {
+  id String @id @default(cuid())
+  tokenHash String @unique
+  administratorId String
+  administrator Administrator @relation(fields: [administratorId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  @@index([expiresAt])
 }
 
 model AdminSession {

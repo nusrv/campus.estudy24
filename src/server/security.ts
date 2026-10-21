@@ -1,4 +1,5 @@
 import { createHash, createHmac, randomBytes, scrypt, timingSafeEqual } from "node:crypto";
+import { PASSWORD_MIN_LENGTH, PASSWORD_MAX_LENGTH } from "../lib/password-policy.ts";
 
 export const ADMIN_PATH = "/portal-control-x7k92";
 export const SESSION_COOKIE = "portal_admin_session";
@@ -24,7 +25,7 @@ function derive(password: string, salt: string): Promise<Buffer> {
   return new Promise((resolve, reject) => scrypt(password, salt, 64, { N: 32768, r: 8, p: 1, maxmem: 64 * 1024 * 1024 }, (err, result) => err ? reject(err) : resolve(result)));
 }
 export async function hashPassword(password: string) {
-  if (password.length < 14 || password.length > 256) throw new Error("Password must contain 14–256 characters.");
+  if (password.length < PASSWORD_MIN_LENGTH || password.length > PASSWORD_MAX_LENGTH) throw new Error("Password must contain 8–256 characters.");
   const salt = randomBytes(16).toString("hex");
   return `scrypt:32768:8:1:${salt}:${(await derive(password, salt)).toString("hex")}`;
 }

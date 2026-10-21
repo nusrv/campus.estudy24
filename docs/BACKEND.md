@@ -24,11 +24,10 @@ The existing Next.js/React versions are retained. Prisma client/CLI/PG adapter a
    npm run db:generate
    npm run db:migrate
    npm run db:seed
-   npm run admin:create
    npm run dev:webpack
    ```
 
-The administrator command prompts for email/name and reads a hidden password twice. Passwords must contain 14–256 characters. It refuses to run without an interactive terminal and refuses to reset or add accounts after the initial administrator exists. There are no seeded passwords or API keys. The seed is repeatable and preserves existing university, source, category, and placement settings.
+The administrator command prompts for email/name and reads a hidden password twice. Passwords must contain 8–256 characters. It refuses to run without an interactive terminal and refuses to reset or add accounts after the initial administrator exists. There are no seeded passwords or API keys. The seed is repeatable and preserves existing university, source, category, and placement settings.
 
 Open `/portal-control-x7k92/login`. The dashboard and every administrative API operation independently enforce authentication/role checks. There are no `/admin`, `/login`, or `/dashboard` routes, public admin links, or sitemap entries. Administrative responses carry no-index and no-store headers. No sitemap is generated in this phase.
 
@@ -43,7 +42,7 @@ Open `/portal-control-x7k92/login`. The dashboard and every administrative API o
 | `TRUST_PROXY` | Default `false`. Set `true` only when Plesk/nginx overwrites incoming `X-Forwarded-For` with a trustworthy client address. |
 | `UPLOAD_DIR` | Persistent filesystem directory outside public/static assets. Default `./storage/uploads`. |
 | `MAX_UPLOAD_BYTES` | Upload cap, default 5 MiB; application ceiling 20 MiB. Set a matching reverse-proxy body cap. |
-| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | Local Compose database provisioning. Password has no default. |
+| `ADMIN_BOOTSTRAP_TOKEN` | Optional one-time browser owner setup authorization; see PLESK.md. Remove after successful setup. |
 | `TEST_DATABASE_URL` | Optional disposable integration database. Its name must end in `_test`; never use a production database. |
 
 There are no `NEXT_PUBLIC_*` secrets. `.env*` files are ignored except `.env.example`.
@@ -68,7 +67,7 @@ Do not run `prisma db push` on production. Use `npm run db:migrate` to apply com
 
 The private dashboard includes overview counts, latest imported articles, and recent ingestion outcomes/errors. Management tables support creation/editing, pagination, and searchable content. Articles additionally support university/category/status/import-date filtering, preview, approve/publish/unpublish/hide, soft deletion, and restoration from the deleted filter. Full previews include original sources, external image/PDF references, registration links, timestamps, and edit history. Manual/imported origin is visible.
 
-University/source identity settings are owner-only. Editors can manage editorial resources; only owners can delete/disable records. Roles are stored server-side and rechecked against the administrator account on every request. This phase intentionally includes no account-management UI.
+University/source identity settings are owner-only. Editors can manage editorial resources; only owners can delete/disable records. Roles are stored server-side and rechecked against the administrator account on every request. Owner-only account management is now available; see PLESK.md.
 
 Advertisements have independent content, optional image uploads, one or multiple university targets or global visibility, one of six placements, priority, start/end schedule, active/paused/archived state, and 30-day aggregate metrics. Links support global/university scope and ordering. Event/program dates use their own structured fields and UTC storage, independent of article publication dates.
 
@@ -145,19 +144,9 @@ Uploads accept one verified PNG/JPEG/WebP/PDF file, bounded multipart streams, m
 
 Run `npm run maintenance` daily via Plesk Scheduled Tasks or an operator-controlled cron. It removes expired sessions/rate buckets and ingestion logs older than 90 days. Audit/edit histories are retained. This is operational cleanup, not RSS scheduling. Database audit inserts are transactional with content mutations.
 
-## Docker and Plesk
+## Plesk deployment
 
-For Compose, set `DATABASE_URL` to the Compose database hostname `db`, not `localhost`; supply your own strong `POSTGRES_PASSWORD`. Set `APP_URL` to your HTTPS public origin. Do not commit `.env`.
-
-```sh
-docker compose up -d --build
-docker compose run --rm migrate node --experimental-strip-types prisma/seed.ts
-docker compose run --rm -it migrate node --experimental-strip-types scripts/create-admin.ts
-```
-
-The database health check gates the one-shot migration, which gates web startup. The non-root runtime uses Next.js standalone output, a persistent upload volume, and loopback-bound ports suitable for a TLS reverse proxy. The `tools` image provides Prisma/maintenance commands. For direct builds, choose `docker build --target runner -t riwaq .`.
-
-On Plesk, provision PostgreSQL, configure environment variables privately, run installation/generation/migration/seed/admin creation before starting Node, build with `npm run build`, and start with `npm start` or deploy the standalone bundle with `.next/static`. Use Node 22, persistent writable uploads, HTTPS, and a correctly configured trusted proxy. Keep the database private and use a dedicated least-privilege database account. Run migrations once per release, not on every web replica. Production builds need no production credentials or API secrets.
+Use [PLESK.md](PLESK.md). Standalone/container deployment has been retired; the root server.js starts normal Next.js production output, with public as the secure document root. Browser setup and owner-only administrator management now replace SSH provisioning in the normal workflow.
 
 ## Verification
 

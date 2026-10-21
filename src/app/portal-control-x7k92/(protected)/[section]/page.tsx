@@ -7,9 +7,16 @@ import { ResourceManager } from "@/components/admin/resource-manager";
 import { VisitorSettings } from "@/components/admin/visitor-settings";
 import { authorizeRole } from "@/server/security";
 import { DEFAULT_COUNTER_LABEL } from "@/server/visitor-policy";
+import { Administrators } from "@/components/admin/administrators";
+import { administratorSelect } from "@/server/administrator-service";
 export default async function ResourcePage({ params, searchParams }: { params: Promise<{ section: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const auth = await requireAdminPage();
   const { section } = await params;
+  if (section === "administrators") {
+    authorizeRole(auth.administrator.role, ["owner"]);
+    const administrators = await db.administrator.findMany({ select: administratorSelect, orderBy: { createdAt: "asc" } });
+    return <Administrators initial={administrators} actorId={auth.administratorId} />;
+  }
   if (section === "settings") {
     authorizeRole(auth.administrator.role, ["owner"]);
     const [settings, aggregate] = await Promise.all([db.siteSettings.findUnique({ where: { id: "main" } }), db.visitorDaily.aggregate({ _sum: { visits: true } })]);

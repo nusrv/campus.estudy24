@@ -1,6 +1,7 @@
+import { createInitialOwner } from "../src/server/administrator-service.ts";
 import { createDatabase } from "../src/server/database-client.ts";
 import { createInterface } from "node:readline/promises";
-import { hashPassword } from "../src/server/security.ts";
+
 import { loginSchema } from "../src/server/validation.ts";
 
 if (!process.stdin.isTTY) throw new Error("Run in an interactive terminal. Passwords must never be passed in command arguments.");
@@ -25,17 +26,13 @@ function hidden(prompt: string): Promise<string> {
     process.stdin.on("data", onData);
   });
 }
-const password = await hidden("Password (14–256 characters, hidden): ");
+const password = await hidden("Password (8–256 characters, hidden): ");
 const confirm = await hidden("Confirm password (hidden): ");
 if (password !== confirm) throw new Error("Passwords do not match.");
 loginSchema.parse({ email, password });
 if (!name || name.length > 200) throw new Error("A display name of 1–200 characters is required.");
 const db = createDatabase();
 try {
-  await db.$transaction(async tx => {
-    if (await tx.administrator.count()) throw new Error("Initial administrator already exists. This command never resets an account.");
-    const admin = await tx.administrator.create({ data: { email, name, passwordHash: await hashPassword(password), role: "owner" } });
-    await tx.auditLog.create({ data: { administratorId: admin.id, action: "initial_administrator_created", entity: "administrators", entityId: admin.id } });
-  }, { isolationLevel: "Serializable", timeout: 15000 });
+  await createInitialOwner(db, { email, name, password });
   console.log("Initial administrator created successfully.");
 } finally { await db.$disconnect(); }

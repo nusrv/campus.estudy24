@@ -111,11 +111,11 @@ No production deployment or database migration was performed during this phase.
    npm run db:seed
    ```
 
-4. On a first installation only, run `npm run admin:create` and enter a hidden password. Existing administrators and sessions do not need to be recreated.
+4. On a first installation only, configure the private bootstrap authorization and create the owner through the browser as described in [PLESK.md](PLESK.md). Existing administrators and sessions do not need to be recreated.
 5. Start `npm run dev:webpack`, review `/` and `/universities/uqu`, and add/publish eStudy24 content through administration. No synthetic public posts are seeded.
 6. Run full TypeScript, ESLint, tests, and production build after installation. Configure a separate `_test` database for the HTTP/PostgreSQL suite. Keep other dev servers stopped while running that suite.
 
-Docker/Plesk configuration is reused. Use persistent PostgreSQL/uploads, a trusted TLS reverse proxy, and the existing one-shot migration workflow. Do not run resets or `db push` against live data. Nothing in this phase automatically deploys the site.
+Current direct Plesk deployment is documented in [PLESK.md](PLESK.md); standalone/container deployment is retired. Use persistent PostgreSQL/uploads, a trusted TLS reverse proxy, and the existing one-shot migration workflow. Do not run resets or `db push` against live data. Nothing in this phase automatically deploys the site.
 
 ## Main files
 

@@ -1,0 +1,5 @@
+# This directory is the ONLY Plesk Document Root. Disable directory listings.
+Options -Indexes
+<FilesMatch "^\.">
+  Require all denied
+</FilesMatch>

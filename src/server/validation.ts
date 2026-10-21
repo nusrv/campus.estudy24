@@ -1,4 +1,5 @@
 import { z } from "zod/v4";
+import { administratorPassword } from "./administrator-validation.ts";
 
 export const slug = z.string().trim().min(1).max(100).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
 export const id = z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/);
@@ -30,7 +31,7 @@ export const ingestArticleSchema = z.object({
 }).strict().transform(value => ({ ...value, source_key: value.source_key || `${value.university_slug}-rss`, image_urls: [...new Set(value.image_urls)].sort(), pdf_urls: [...new Set(value.pdf_urls)].sort(), registration_links: [...new Set(value.registration_links)].sort() }));
 export type IngestArticle = z.output<typeof ingestArticleSchema>;
 
-export const loginSchema = z.object({ email: z.email().max(254).transform(v => v.toLowerCase()), password: z.string().min(1).max(256) }).strict();
+export const loginSchema = z.object({ email: z.email().max(254).transform(v => v.toLowerCase()), password: administratorPassword }).strict();
 export const universitySchema = z.object({ name: text(200).min(1), slug, description: text(10000).default(""), city: text(100).default(""), region: text(100).default(""), websiteUrl: optionalUrl, logoUrl: optionalMedia, enabled: z.boolean().default(true) }).strict();
 export const articleSchema = z.object({ universityId: id, title: text(500).min(1), summary: text(5000).default(""), description: text(10000).default(""), content: text(100000).default(""), categoryId: id.nullable().optional(), sourceUrl: optionalUrl, originalPublishedAt: optionalDate, status: status.default("pending_review"), visible: z.boolean().default(true), imageUrls: z.array(mediaUrl).max(20).default([]), pdfUrls: z.array(mediaUrl).max(20).default([]), registrationLinks: z.array(url).max(20).default([]) }).strict();
 // Do not derive this with .partial(): Zod defaults must never reset omitted editorial fields.

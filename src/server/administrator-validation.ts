@@ -1,0 +1,12 @@
+import { z } from 'zod/v4';
+import { PASSWORD_MIN_LENGTH, PASSWORD_MAX_LENGTH } from '../lib/password-policy.ts';
+export const administratorEmail = z.string().trim().toLowerCase().email().max(254);
+export const administratorName = z.string().trim().min(1).max(200);
+export const administratorPassword = z.string().min(PASSWORD_MIN_LENGTH).max(PASSWORD_MAX_LENGTH);
+const credentials = { email: administratorEmail, name: administratorName, password: administratorPassword, confirmation: administratorPassword };
+const matches = (data: { password: string; confirmation: string }) => data.password === data.confirmation;
+const mismatch = { message: 'Passwords do not match.', path: ['confirmation'] };
+export const setupSchema = z.object({ ...credentials, bootstrapToken: z.string().min(32).max(256) }).strict().refine(matches, mismatch);
+export const editorSchema = z.object(credentials).strict().refine(matches, mismatch);
+export const administratorUpdateSchema = z.object({ email: administratorEmail, name: administratorName, active: z.boolean() }).strict();
+export const resetSchema = z.object({ email: administratorEmail, token: z.string().regex(/^[A-Za-z0-9_-]{43}$/), password: administratorPassword, confirmation: administratorPassword }).strict().refine(matches, mismatch);

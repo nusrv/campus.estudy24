@@ -2,6 +2,7 @@ import "server-only";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "./db";
+import { lockAdministrators } from "./administrator-service";
 import { appUrl, authSecret } from "./config";
 import { ADMIN_PATH, SESSION_COOKIE, SESSION_TTL_SECONDS, HttpError, authorizeRole, csrfToken, enforceCsrf, enforceOrigin, newToken, tokenDigest } from "./security";
 
@@ -29,10 +30,15 @@ export async function requireAdmin(request: Request, roles: readonly string[] = 
   return record;
 }
 export function clientCsrf(tokenHash: string) { return csrfToken(tokenHash, authSecret()); }
-export async function createSession(administratorId: string) {
+export async function createSession(administratorId: string, expectedPasswordHash: string) {
   const token = newToken();
   const expiresAt = new Date(Date.now() + SESSION_TTL_SECONDS * 1000);
-  const record = await db.adminSession.create({ data: { administratorId, tokenHash: tokenDigest(token, authSecret()), expiresAt } });
+  const record = await db.$transaction(async tx => {
+    await lockAdministrators(tx);
+    const admin = await tx.administrator.findUnique({ where: { id: administratorId } });
+    if (!admin?.active || admin.passwordHash !== expectedPasswordHash || await tx.adminPasswordReset.count({ where: { administratorId, expiresAt: { gt: new Date() } } })) throw new HttpError(401, "INVALID_CREDENTIALS", "The account requires a password reset or login retry.");
+    return tx.adminSession.create({ data: { administratorId, tokenHash: tokenDigest(token, authSecret()), expiresAt } });
+  });
   (await cookies()).set(SESSION_COOKIE, token, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "strict", path: ADMIN_PATH, maxAge: SESSION_TTL_SECONDS, expires: expiresAt });
   return record;
 }
