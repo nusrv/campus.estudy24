@@ -1,5 +1,7 @@
 # eStudy24 Campus
 
+University news categories: [approved taxonomy, safe seed and Plesk release](docs/NEWS-CATEGORIES.md).
+
 Current content-automation release: [migration, logo seed, publication policy and n8n changes](docs/CONTENT-AUTOMATION.md), [verification](docs/CONTENT-AUTOMATION-VERIFICATION.md).
 
 Earlier university/n8n/counter release: [Plesk migration and explicit production seed](docs/INTEGRATIONS.md), [verification results](docs/INTEGRATIONS-VERIFICATION.md).

@@ -9,6 +9,7 @@ import { fingerprint, incomingFields } from "./ingestion-policy";
 import { ingestionAuthentication } from './ingestion-auth';
 import { requireUniversityScope } from "./integration-policy";
 import { newsPublicationDecision } from './publication-policy';
+import { approvedNewsCategory } from '../lib/news-categories';
 type UniversityCredential = { keyId: string; universityId: string; universitySlug: string };
 
 export type IngestResult = { index: number; outcome: "created" | "updated" | "unchanged" | "rejected" | "failed"; article_id?: string; resource_id?: string; resource_type?: string; publication?: { status: string; decision: string }; error?: { code: string; fields?: { path: string; message: string }[] } };
@@ -28,6 +29,9 @@ async function applyImport(input: IngestArticle, requestId: string, index: numbe
         if (!source || !source.enabled || !source.university.enabled || source.university.slug !== input.university_slug) throw new HttpError(422, "UNKNOWN_SOURCE", "Source or university is not enabled.");
         if (credential && source.universityId !== credential.universityId) throw new HttpError(403, 'UNIVERSITY_SCOPE_MISMATCH', 'المصدر لا يتبع الجامعة المخوّلة.');
         if (new URL(source.url).hostname !== new URL(input.source_url).hostname) throw new HttpError(422, "SOURCE_HOST_MISMATCH", "Article URL must belong to the configured source host.");
+        const registeredCategory = await tx.articleCategory.findUnique({ where: { slug: input.category } });
+        const approvedCategory = approvedNewsCategory(input.category);
+        if (!registeredCategory && !approvedCategory) throw new HttpError(422, 'UNKNOWN_CATEGORY', 'التصنيف غير معروف. استخدم تصنيفًا معتمدًا أو تصنيفًا أضافته إدارة البوابة.');
         const digest = fingerprint(input);
         const existing = await tx.article.findUnique({ where: { sourceId_originalArticleId: { sourceId: source.id, originalArticleId: input.source_id } } });
         const decision = newsPublicationDecision(source.university.autoPublishNews, input, existing);
@@ -36,7 +40,7 @@ async function applyImport(input: IngestArticle, requestId: string, index: numbe
         let articleId = existing?.id;
         let outcome: IngestResult["outcome"] = "unchanged";
         if (!existing || existing.fingerprint !== digest || Object.keys(publicationData).length) {
-          const category = await tx.articleCategory.upsert({ where: { slug: input.category }, create: { slug: input.category, name: input.category }, update: {} });
+          const category = registeredCategory || await tx.articleCategory.upsert({ where: { slug: input.category }, create: { slug: input.category, name: approvedCategory!.name }, update: {} });
           const fields = holdPublishedUpdate ? {} : incomingFields(input, category.id, existing?.editedFields || []);
           if (existing) {
             // Status, visibility, deletedAt, publishedAt and universityId are deliberately absent.

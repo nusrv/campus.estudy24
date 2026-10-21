@@ -20,7 +20,8 @@
     "maintenance": "node --env-file-if-exists=.env --experimental-strip-types scripts/maintenance.ts",
     "typecheck:foundation": "tsc --project tsconfig.foundation.json",
     "db:validate": "prisma validate",
-    "db:seed:logos": "node --env-file-if-exists=.env --experimental-strip-types scripts/seed-logos.ts"
+    "db:seed:logos": "node --env-file-if-exists=.env --experimental-strip-types scripts/seed-logos.ts",
+    "db:seed:categories": "node --env-file-if-exists=.env --experimental-strip-types scripts/seed-news-categories.ts"
   },
   "dependencies": {
     "@fontsource/ibm-plex-sans-arabic": "^5.2.0",

@@ -555,7 +555,19 @@
           },
           "category": {
             "$ref": "#/components/schemas/Slug",
-            "default": "general"
+            "default": "general",
+            "description": "News category slug. Approved: general, admissions, academic, training, opportunities, activities, research, student-services, announcements. Defaults to general. Existing administrator-registered custom categories remain supported. Unregistered unknown slugs return UNKNOWN_CATEGORY (422). Editorial category overrides and publication policies remain protected.",
+            "examples": [
+              "general",
+              "admissions",
+              "academic",
+              "training",
+              "opportunities",
+              "activities",
+              "research",
+              "student-services",
+              "announcements"
+            ]
           }
         },
         "description": "External media URLs are attributed references, not automatically downloaded/rehosted. status, origin, university_id and administrator fields are forbidden. Missing optional fields default as documented; administrator-edited fields remain protected. Auto-publication requires owner opt-in, HTTPS source, title >=8 characters, summary or body >=40 characters, a supplied original publication timestamp within the last 366 days and no more than 5 minutes in the future, and no HTML/script/placeholder markup. Otherwise valid news stays in review. Malformed required fields are rejected. Existing manual decisions are never automatically republished."

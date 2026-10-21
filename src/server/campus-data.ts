@@ -1,3 +1,4 @@
+import { NEWS_CATEGORIES, orderNewsCategories } from "../lib/news-categories";
 import "server-only";
 import { Prisma } from "@prisma/client";
 import { db } from "./db";
@@ -74,8 +75,8 @@ export async function universitySections(universitySlug: string, query: PublicQu
     all || section === "events" ? db.event.findMany({ where: eventWhere, ...args, orderBy: [{ startsAt: "asc" }, { id: "asc" }] }) : [],
     all || section === "calendar" ? db.event.findMany({ where: calendarWhere, ...args, orderBy: [{ startsAt: "asc" }, { id: "asc" }] }) : [],
     all || ["links", "services", "schedules", "calendar"].includes(section) ? db.managedLink.findMany({ where: linksWhere, take: 12, skip: all || section === "calendar" ? 0 : (page - 1) * 12, orderBy: [{ displayOrder: "asc" }, { id: "asc" }] }) : [],
-    db.articleCategory.findMany({ where: { articles: { some: { ...publishedArticleWhere, ...universityContentScope(universitySlug) } } }, select: { name: true, slug: true }, orderBy: { name: "asc" } }),
+    db.articleCategory.findMany({ where: { OR: [{ slug: { in: NEWS_CATEGORIES.map(category => category.slug) } }, { articles: { some: { ...publishedArticleWhere, ...universityContentScope(universitySlug) } } }] }, select: { name: true, slug: true }, orderBy: { name: "asc" } }),
     section === "news" ? db.article.count({ where: newsWhere }) : section === "programs" ? db.program.count({ where: programWhere }) : section === "events" ? db.event.count({ where: eventWhere }) : section === "calendar" ? db.event.count({ where: calendarWhere }) : ["links", "services", "schedules"].includes(section) ? db.managedLink.count({ where: linksWhere }) : 0,
   ]);
-  return { university, section, news, programs, events, calendar, links, categories, total, page, pages: Math.ceil(total / 12) };
+  return { university, section, news, programs, events, calendar, links, categories: orderNewsCategories(categories), total, page, pages: Math.ceil(total / 12) };
 }

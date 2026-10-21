@@ -9,6 +9,8 @@ import { chromium } from 'playwright-core';
 import { ADMIN_PATH, hashPassword, csrfToken, tokenDigest } from '../../src/server/security.ts';
 import { manageUniversityKey } from '../../src/server/university-keys.ts';
 import { seedUniversityLogos } from '../../prisma/seed-logos.ts';
+import { seedNewsCategories } from '../../prisma/seed-news-categories.ts';
+import { NEWS_CATEGORIES } from '../../src/lib/news-categories.ts';
 const databaseUrl = process.env.TEST_DATABASE_URL;
 test('PostgreSQL + HTTP + browser: publication policies, structured ingestion, Telegram and official links', { skip: !databaseUrl, timeout: 300000 }, async t => {
   assert.match(new URL(databaseUrl!).pathname, /_test$/);
@@ -142,6 +144,56 @@ test('PostgreSQL + HTTP + browser: publication policies, structured ingestion, T
       const page = await (await request(`/universities/${slug}`)).text(); assert.doesNotMatch(page, /مجتمع طلاب جامعة الاختبار \| eStudy24|data-official-website|example_support/);
       for (const type of Object.keys(payloads)) { assert.equal((await request(`${ADMIN_PATH}/api/integrations/n8n?type=${type}`)).status, 401); assert.equal((await request(`${ADMIN_PATH}/api/integrations/n8n?type=${type}`, 'GET', undefined, auth)).status, 200); }
       assert.equal((await request(`${ADMIN_PATH}/api/integrations/n8n?type=constructor`, 'GET', undefined, auth)).status, 422);
+    });
+    await t.test('category initialization preserves IDs, custom names, existing articles and repeated seed counts', async () => {
+      const general = await db.articleCategory.findUniqueOrThrow({ where: { slug: 'general' } });
+      const articles = await db.article.findMany({ where: { universityId: university.id }, orderBy: { id: 'asc' } });
+      await db.articleCategory.update({ where: { id: general.id }, data: { name: 'عام' } });
+      await db.$transaction(tx => seedNewsCategories(tx));
+      const initialized = await db.articleCategory.findUniqueOrThrow({ where: { slug: 'general' } }); assert.equal(initialized.id, general.id); assert.equal(initialized.name, 'أخبار عامة');
+      await db.articleCategory.update({ where: { id: general.id }, data: { name: 'اسم عام مخصص للإدارة' } });
+      await db.$transaction(tx => seedNewsCategories(tx)); await db.$transaction(tx => seedNewsCategories(tx));
+      assert.equal(await db.articleCategory.count({ where: { slug: { in: NEWS_CATEGORIES.map(category => category.slug) } } }), 9);
+      assert.equal((await db.articleCategory.findUniqueOrThrow({ where: { slug: 'general' } })).name, 'اسم عام مخصص للإدارة');
+      assert.deepEqual(await db.article.findMany({ where: { universityId: university.id }, orderBy: { id: 'asc' } }), articles);
+      await db.articleCategory.update({ where: { id: general.id }, data: { name: 'أخبار عامة' } });
+    });
+    await t.test('scoped category imports, university filters, empty categories and editorial category locks', async () => {
+      await db.university.update({ where: { id: university.id }, data: { autoPublishNews: false } });
+      const imported: Record<string, string> = {};
+      for (const category of NEWS_CATEGORIES) {
+        const response = await request('/api/ingest/articles', 'POST', { ...news, source_id: `category-${category.slug}`, category: category.slug, title: `اختبار التصنيف ${category.slug}` }, headers); assert.equal(response.status, 201);
+        const result = (await response.json()).results[0]; imported[category.slug] = result.article_id;
+        const stored = await db.article.findUniqueOrThrow({ where: { id: result.article_id }, include: { category: true } }); assert.equal(stored.category!.slug, category.slug); assert.equal(stored.status, 'pending_review');
+        await db.article.update({ where: { id: stored.id }, data: { status: 'published', publishedAt: new Date() } });
+      }
+      const general = await db.articleCategory.findUniqueOrThrow({ where: { slug: 'general' } });
+      await db.article.create({ data: { universityId: other.id, title: 'خبر جامعة أخرى محظور في التصفية', categoryId: general.id, status: 'published', publishedAt: new Date(), origin: 'manual' } });
+      for (const category of NEWS_CATEGORIES) {
+        const api = await (await request(`/api/news?university=${slug}&category=${category.slug}`)).json(); assert.equal(api.total, 1); assert.equal(api.items[0].id, imported[category.slug]);
+        const html = await (await request(`/universities/${slug}?section=news&category=${category.slug}`)).text(); assert.match(html, /تصنيفات أخبار الجامعة/); assert.match(html, new RegExp(`اختبار التصنيف ${category.slug}`)); assert.doesNotMatch(html, /خبر جامعة أخرى محظور في التصفية/);
+      }
+      const bad = await request('/api/ingest/articles', 'POST', { ...news, source_id: 'category-unknown', category: 'misspelled-category' }, headers); assert.equal(bad.status, 422); assert.equal((await bad.json()).results[0].error.code, 'UNKNOWN_CATEGORY');
+      assert.equal(await db.articleCategory.count({ where: { slug: 'misspelled-category' } }), 0);
+      const custom = await db.articleCategory.create({ data: { slug: `legacy-${suffix}`, name: 'تصنيف إداري قديم' } });
+      assert.equal((await request('/api/ingest/articles', 'POST', { ...news, source_id: 'category-legacy', category: custom.slug }, headers)).status, 201);
+      assert.equal((await request(`${ADMIN_PATH}/api/articles/${imported.admissions}`, 'PATCH', { categoryId: general.id }, auth)).status, 200);
+      await request('/api/ingest/articles', 'POST', { ...news, source_id: 'category-admissions', title: 'عنوان جديد من المصدر', category: 'research' }, headers);
+      assert.equal((await db.article.findUniqueOrThrow({ where: { id: imported.admissions } })).categoryId, general.id);
+      assert.match(await (await request(`/universities/${slug}?section=news&category=admissions`)).text(), /لا توجد أخبار منشورة مطابقة/);
+      if (existsSync(executable)) {
+        const browser = await chromium.launch({ executablePath: executable, headless: true });
+        try { for (const width of [390, 1440]) {
+          const page = await browser.newPage({ viewport: { width, height: 900 } }); await page.goto(`${origin}/universities/${slug}?section=news`);
+          const navigation = page.getByRole('navigation', { name: 'تصنيفات أخبار الجامعة', exact: true }); assert.equal(await navigation.getByRole('link').count(), 10);
+          assert.equal(await page.getByRole('navigation', { name: 'أقسام الجامعة', exact: true }).getByRole('link').count(), 8);
+          assert.equal(await navigation.getByRole('link', { name: 'الكل', exact: true }).getAttribute('aria-current'), 'page');
+          await navigation.getByRole('link', { name: 'الدورات والتدريب', exact: true }).click(); await page.waitForURL('**category=training');
+          assert.equal(await page.locator('form input[name="category"]').inputValue(), 'training');
+          await navigation.getByRole('link', { name: 'الكل', exact: true }).focus(); await page.keyboard.press('Enter'); await page.waitForURL(url => !url.searchParams.has('category'));
+          await page.close();
+        } } finally { await browser.close(); }
+      }
     });
     await t.test('logo seed is repeatable and preserves uploaded logos and configured policies', async () => {
       const before = await db.university.findUniqueOrThrow({ where: { id: university.id } }); await seedUniversityLogos(db); await seedUniversityLogos(db);

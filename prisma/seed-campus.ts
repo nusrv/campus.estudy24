@@ -1,3 +1,4 @@
+import { seedNewsCategories } from './seed-news-categories.ts';
 import type { PrismaClient } from '@prisma/client';
 import { SAUDI_UNIVERSITIES, demoAdId } from './campus-seed-data.ts';
 export async function seedCampus(db: PrismaClient) {
@@ -5,6 +6,7 @@ export async function seedCampus(db: PrismaClient) {
     // Prevent concurrent seeds racing conditional fills/associations.
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(214721, 793)`;
     await tx.advertisementPlacement.upsert({ where: { id: 'university_banner' }, update: {}, create: { id: 'university_banner', name: 'بانر الجامعة' } });
+    await seedNewsCategories(tx);
     for (const data of SAUDI_UNIVERSITIES) {
       const university = await tx.university.upsert({ where: { slug: data.slug }, create: { ...data, enabled: true }, update: { enabled: true } });
       // Keep editorial identity, logos and descriptions; fill only missing official URLs.
