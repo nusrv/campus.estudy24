@@ -1,0 +1,6 @@
+*.cjs text eol=lf
+*.workflow.json text eol=lf
+fixtures/*.html -text
+# Preserve the captured, unaltered upstream row, including its trailing indentation.
+fixtures/original-row-2285.html whitespace=-blank-at-eol
+fixtures/manifest.json text eol=lf

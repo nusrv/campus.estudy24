@@ -2,6 +2,8 @@
 
 Academic degrees directory: [model, permissions, scoped ingestion contract and Plesk release](docs/ACADEMIC-PROGRAMS.md).
 
+Umm Al-Qura academic collector: [Arabic n8n import, dry-run and deliberate ingestion guide](integrations/n8n/uqu-academic/README.ar.md).
+
 University ambassadors: [roles, university isolation, Owner workflow and Plesk migration](docs/AMBASSADORS.md).
 
 Bulk news deletion: [permissions, safeguards, verification and Plesk update](docs/BULK-NEWS.md).

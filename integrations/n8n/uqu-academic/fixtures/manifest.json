@@ -1,0 +1,57 @@
+{
+  "captured_on": "2026-10-22",
+  "live_collection_completed_at": "2026-10-22T09:09:38.187Z",
+  "authority": "Umm Al-Qura University public academic directory",
+  "purpose": "Parser test fixtures only; never seed or submit fixture data to production",
+  "transformations": "page-N: academic table plus exact displayed range/pagination text; presentation classes/styles, Alpine bindings, SVGs and comments omitted. original-row-2285: one unaltered academic row. No login forms, cookies, snapshots or CSRF tokens retained. Page excerpt whitespace collapsed with one table row per line for reviewability; original-row-2285 remains byte-for-byte unchanged.",
+  "official_rows": 337,
+  "unique_programs": 333,
+  "duplicate_rows": 4,
+  "dataset_sha256": "9a9373273a03a447e91abd1e04c3df65b9c489fdf43ea8432619dfe4172bbade",
+  "pages": [
+    {
+      "page": 1,
+      "rows": 100
+    },
+    {
+      "page": 2,
+      "rows": 100
+    },
+    {
+      "page": 3,
+      "rows": 100
+    },
+    {
+      "page": 4,
+      "rows": 37
+    }
+  ],
+  "campus_requests": 0,
+  "files": [
+    {
+      "file": "original-row-2285.html",
+      "sha256": "999af1237de91f0d5a959ae857a2f7e9a364104add71e0664f1a43460cb24da3",
+      "source_url": "https://uqu.edu.sa/App/Degrees?perPage=100&page=1"
+    },
+    {
+      "file": "page-1.html",
+      "sha256": "6bff381a80d12ba09a1ebab94e93826900dd5ba7b6957cae95bb24fa93f5f97c",
+      "source_url": "https://uqu.edu.sa/App/Degrees?perPage=100&page=1"
+    },
+    {
+      "file": "page-2.html",
+      "sha256": "c392664eed70ee8cea6f238f8c7db86f72fb346f3f7aa51d1f8422d105054a7d",
+      "source_url": "https://uqu.edu.sa/App/Degrees?perPage=100&page=2"
+    },
+    {
+      "file": "page-3.html",
+      "sha256": "3e48b82d5a556fa8631c9e2bd74065232c7fedeadb8bd8f57e2d3c6df9cd46d2",
+      "source_url": "https://uqu.edu.sa/App/Degrees?perPage=100&page=3"
+    },
+    {
+      "file": "page-4.html",
+      "sha256": "1cf0fa61317857e920f17a36daa647ec400b1550287be9888116cbea6f4a2639",
+      "source_url": "https://uqu.edu.sa/App/Degrees?perPage=100&page=4"
+    }
+  ]
+}
