@@ -1,0 +1,8 @@
+const selectClass = 'h-11 w-full rounded-xl border border-border bg-white px-3 text-sm';
+export function AcademicAdminFilters({ options, filters, universities, ambassador }: { options?: { degrees: string[]; colleges: string[]; departments: string[] }; filters: Record<string, string>; universities: { id: string; name: string; slug?: string }[]; ambassador: boolean }) {
+  return <>{!ambassador && <select name="university" aria-label="تصفية حسب الجامعة" defaultValue={filters.university || ''} className={selectClass}><option value="">كل الجامعات</option>{universities.map(item => <option key={item.id} value={item.slug}>{item.name}</option>)}</select>}
+    {([['degree', 'الدرجة الأكاديمية', options?.degrees], ['college', 'الكلية', options?.colleges], ['department', 'القسم', options?.departments]] as const).map(([name, label, values]) => <select key={name} name={name} aria-label={label} defaultValue={filters[name] || ''} className={selectClass}><option value="">كل خيارات {label}</option>{values?.map(value => <option key={value} value={value}>{value}</option>)}</select>)}
+    <select name="status" aria-label="حالة البرنامج" defaultValue={filters.status || ''} className={selectClass}><option value="">كل الحالات</option><option value="pending_review">بانتظار المراجعة</option><option value="published">منشور</option><option value="unpublished">غير منشور</option><option value="hidden">مخفي</option><option value="approved">معتمد</option></select>
+    <select name="deleted" aria-label="حالة الحذف" defaultValue={filters.deleted || 'false'} className={selectClass}><option value="false">السجلات الحالية</option><option value="true">المحذوفات القابلة للاستعادة</option></select>
+  </>;
+}

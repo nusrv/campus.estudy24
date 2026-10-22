@@ -150,7 +150,7 @@ test('PostgreSQL + HTTP + browser: ambassador account lifecycle and strict unive
           await page.goto(origin + ADMIN_PATH); await page.getByRole('heading', { name: `لوحة سفير ${university.name}` }).waitFor();
           assert.doesNotMatch(await page.locator('main').innerText(), new RegExp(other.name)); assert.doesNotMatch(await page.locator('main').innerText(), /[٠-٩]/);
           if (mobile) await page.getByRole('button', { name: 'قائمة الإدارة', exact: true }).click();
-          assert.equal(await page.locator('aside a').count(), 5);
+          assert.equal(await page.locator('aside a').count(), 6);
           await page.goto(origin + `${ADMIN_PATH}/articles`); await page.getByRole('button', { name: /إضافة جديد/ }).click();
           assert.equal(await page.locator('#field-universityId').count(), 0); await page.locator('#field-title').fill(`خبر من المتصفح ${mobile ? 'هاتف' : 'مكتب'}`);
           const save = page.waitForResponse(r => r.url().endsWith('/api/articles') && r.request().method() === 'POST'); await page.getByRole('button', { name: 'حفظ التغييرات', exact: true }).click(); assert.equal((await save).status(), 201);

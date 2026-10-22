@@ -439,6 +439,84 @@
           }
         }
       }
+    },
+    "/api/ingest/academic-programs": {
+      "post": {
+        "operationId": "ingestAcademicPrograms",
+        "summary": "Import university academic degrees and majors for review",
+        "description": "University-specific key required; legacy global key is not accepted. Single record or {items:[...]} with 1–50 records, maximum 1 MiB. Mixed-university batches are rejected before importing. 60 requests/min/key and client bucket. Required source_key, source_id, source_url, name. Scope derives from key; optional university_slug must match. University+source_key+source_id identifies each variant; never deduplicate by name. Manual fields/status/visibility/deletions survive imports; no absence-based deletion.",
+        "security": [
+          {
+            "UniversityKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/AcademicProgramInput"
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "items"
+                    ],
+                    "properties": {
+                      "items": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 50,
+                        "items": {
+                          "$ref": "#/components/schemas/AcademicProgramInput"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Result"
+          },
+          "201": {
+            "$ref": "#/components/responses/Result"
+          },
+          "207": {
+            "$ref": "#/components/responses/Result"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/RecordOrError"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/RecordOrError"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -625,7 +703,8 @@
               "links",
               "events",
               "calendar",
-              "programs"
+              "programs",
+              "academic-programs"
             ]
           },
           "publication": {
@@ -1017,6 +1096,174 @@
           }
         },
         "description": "Always pending_review on first import. Resource identity is source + content type + source_id. Later sync preserves manual fields, status, visibility and deletion. No inference from articles."
+      },
+      "AcademicProgramInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "source_key",
+          "source_id",
+          "source_url",
+          "name"
+        ],
+        "properties": {
+          "university_slug": {
+            "$ref": "#/components/schemas/Slug"
+          },
+          "source_key": {
+            "$ref": "#/components/schemas/Slug"
+          },
+          "source_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "source_url": {
+            "$ref": "#/components/schemas/Url"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "degree_name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "college": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "department": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "campus": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "credit_hours": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 5000
+          },
+          "study_mode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 20000
+          },
+          "tuition_info": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 3000
+          },
+          "tuition_verified": {
+            "type": "boolean",
+            "default": false
+          },
+          "tuition_source_url": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Url"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "official_program_url": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Url"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "study_plan_url": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Url"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "description": "Illustrative academic directory contract, not training. Fees require explicit tuition_verified=true plus tuition_source_url; otherwise omit/null all fee text/URLs and use false. Degree names are unrestricted source text. Missing optional fields normalize to null. Never infer study plans or admission availability.",
+        "allOf": [
+          {
+            "if": {
+              "required": [
+                "tuition_info"
+              ],
+              "properties": {
+                "tuition_info": {
+                  "type": "string"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "tuition_verified",
+                "tuition_source_url"
+              ],
+              "properties": {
+                "tuition_verified": {
+                  "const": true
+                },
+                "tuition_source_url": {
+                  "$ref": "#/components/schemas/Url"
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "tuition_verified": {
+                  "const": false
+                },
+                "tuition_source_url": {
+                  "type": "null"
+                }
+              }
+            }
+          }
+        ]
       }
     },
     "responses": {

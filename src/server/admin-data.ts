@@ -1,4 +1,5 @@
 import "server-only";
+import { academicList, saveAcademic, deleteAcademic } from "./academic-programs";
 import { administratorAccess, contentPermission, universityScope, bindUniversity, scopedRecord, revokeUniversitySessions } from "./administrator-access";
 import { validateScopedMedia } from "./administrator-media";
 import { Prisma } from "@prisma/client";
@@ -8,7 +9,7 @@ import { adSchema, articlePatchSchema, articleSchema, categorySchema, eventSchem
 import { changedEditorialFields } from "./ingestion-policy";
 import { bulkArticleDeleteSchema } from './bulk-article-validation';
 
-export const RESOURCES = ["universities", "articles", "platform_posts", "ads", "links", "events", "programs", "sources", "categories", "logs", "audit"] as const;
+export const RESOURCES = ["universities", "articles", "academic-programs", "platform_posts", "ads", "links", "events", "programs", "sources", "categories", "logs", "audit"] as const;
 export type Resource = typeof RESOURCES[number];
 export function resourceName(value: string): Resource {
   if (!(RESOURCES as readonly string[]).includes(value)) throw new HttpError(404, "NOT_FOUND", "Unknown resource.");
@@ -33,6 +34,7 @@ export async function adminList(resource: Resource, search: URLSearchParams, adm
   contentPermission(actor, resource);
   const scope = universityScope(actor);
   if (actor.role === "ambassador" && [...search].some(([key, value]) => (key === "university" && value !== actor.university?.slug) || (["universityId", "university_id", "university_slug"].includes(key) && value !== actor.universityId))) throw new HttpError(403, "UNIVERSITY_SCOPE", "University filter is outside your assignment.");
+  if (resource === "academic-programs") return academicList(db, search, actor);
   const p = pagination(search);
   const args = { skip: p.skip, take: p.take };
   const textSearch = p.search ? { contains: p.search, mode: "insensitive" as const } : undefined;
@@ -76,6 +78,13 @@ export async function adminList(resource: Resource, search: URLSearchParams, adm
   return { items, total, page: p.page, page_size: p.take, pages: Math.ceil(total / p.take) };
 }
 
+export async function academicDetails(id: string, administratorId: string, sessionId?: string) {
+  const actor = await administratorAccess(db, administratorId, false, sessionId);
+  contentPermission(actor, 'academic-programs');
+  const item = await db.academicProgram.findFirst({ where: { id, ...universityScope(actor) } });
+  if (!item) throw new HttpError(404, 'NOT_FOUND', 'البرنامج الأكاديمي غير موجود أو غير متاح لهذا الحساب.');
+  return item;
+}
 export async function articleDetails(id: string, administratorId: string, sessionId?: string) {
   const actor = await administratorAccess(db, administratorId, false, sessionId);
   contentPermission(actor, "articles");
@@ -92,6 +101,7 @@ export async function saveResource(resource: Resource, raw: unknown, administrat
     if (recordId) await scopedRecord(tx, actor, resource, recordId);
     const input = bindUniversity(actor, raw);
     await validateScopedMedia(tx, actor, input);
+    if (resource === "academic-programs") return saveAcademic(tx, input, actor, recordId);
     let item: { id: string };
     if (resource === "platform_posts") {
       const old = recordId ? await tx.platformPost.findUniqueOrThrow({ where: { id: recordId } }) : null;
@@ -168,8 +178,8 @@ export async function saveResource(resource: Resource, raw: unknown, administrat
     } else if (resource === "sources") {
       const data = sourceSchema.parse(input);
       if (recordId) {
-        const old = await tx.ingestionSource.findUnique({ where: { id: recordId }, include: { _count: { select: { articles: true, contentSyncs: true } } } });
-        if (old && (old._count.articles || old._count.contentSyncs) && (old.key !== data.key || old.universityId !== data.universityId)) throw new HttpError(409, "SOURCE_IN_USE", "Source identity cannot change after ingestion.");
+        const old = await tx.ingestionSource.findUnique({ where: { id: recordId }, include: { _count: { select: { articles: true, contentSyncs: true, academicPrograms: true } } } });
+        if (old && (old._count.articles || old._count.contentSyncs || old._count.academicPrograms) && (old.key !== data.key || old.universityId !== data.universityId)) throw new HttpError(409, "SOURCE_IN_USE", "Source identity cannot change after ingestion.");
       }
       item = recordId ? await tx.ingestionSource.update({ where: { id: recordId }, data }) : await tx.ingestionSource.create({ data });
     } else if (resource === "categories") {
@@ -213,6 +223,7 @@ export async function deleteResource(resource: Resource, id: string, administrat
     const actor = await administratorAccess(tx, administratorId, true, sessionId);
     contentPermission(actor, resource, 'delete');
     await scopedRecord(tx, actor, resource, id);
+    if (resource === 'academic-programs') return deleteAcademic(tx, actor, id);
     const universityId = actor.role === 'ambassador' ? actor.universityId : resource === 'links' ? (await tx.managedLink.findUnique({ where: { id } }))?.universityId : resource === 'events' ? (await tx.event.findUnique({ where: { id } }))?.universityId : resource === 'programs' ? (await tx.program.findUnique({ where: { id } }))?.universityId : null;
     if (['links', 'events', 'programs'].includes(resource)) await tx.contentSync.updateMany({ where: { recordId: id, contentType: { in: resource === 'events' ? ['events', 'calendar'] : [resource] } }, data: { deletedAt: new Date() } });
     switch (resource) {

@@ -41,10 +41,12 @@ export async function directoryPage(search: URLSearchParams) {
   return { items, total, regions: regions.map(r => r.region), page, pages: Math.ceil(total / 12) };
 }
 export const universityTabs = [
+  // The eight existing sections retain their keys and order.
   { value: "all", label: "نظرة عامة" }, { value: "news", label: "أخبار الجامعة" },
   { value: "programs", label: "البرامج والفرص" }, { value: "events", label: "الفعاليات" },
   { value: "calendar", label: "التقويم الأكاديمي" }, { value: "schedules", label: "الجداول الدراسية" },
   { value: "services", label: "خدمات الطلبة" }, { value: "links", label: "روابط مهمة" },
+  { value: "academic-programs", label: "\u0627\u0644\u062a\u062e\u0635\u0635\u0627\u062a \u0648\u0627\u0644\u0628\u0631\u0627\u0645\u062c \u0627\u0644\u0623\u0643\u0627\u062f\u064a\u0645\u064a\u0629" },
 ] as const;
 export function selectedTab(query: PublicQuery) { const value = typeof query.section === "string" ? query.section : "all"; return universityTabs.some(t => t.value === value) ? value : "all"; }
 

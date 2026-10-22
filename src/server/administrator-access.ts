@@ -3,7 +3,7 @@ import type { Prisma, PrismaClient } from '@prisma/client';
 import { HttpError } from './security.ts';
 import { lockAdministrators } from './administrator-service.ts';
 
-export const ambassadorResources = ['articles', 'links', 'events', 'programs'] as const;
+export const ambassadorResources = ['articles', 'links', 'events', 'programs', 'academic-programs'] as const;
 export type AdministratorAccess = { id: string; role: string; universityId: string | null; university: { id: string; name: string; slug: string; enabled: boolean } | null };
 export async function administratorAccess(db: PrismaClient | Prisma.TransactionClient, id: string, writing = false, sessionId?: string): Promise<AdministratorAccess> {
   // Account reassignment, disabling and content writes share the same transaction lock.
@@ -34,7 +34,7 @@ export function bindUniversity(actor: AdministratorAccess, raw: unknown) {
 export async function scopedRecord(tx: Prisma.TransactionClient, actor: AdministratorAccess, resource: string, id: string) {
   if (actor.role !== 'ambassador') return;
   const where = { id, universityId: actor.universityId! };
-  const item = resource === 'articles' ? await tx.article.findFirst({ where, select: { id: true } }) : resource === 'links' ? await tx.managedLink.findFirst({ where, select: { id: true } }) : resource === 'events' ? await tx.event.findFirst({ where, select: { id: true } }) : resource === 'programs' ? await tx.program.findFirst({ where, select: { id: true } }) : null;
+  const item = resource === 'academic-programs' ? await tx.academicProgram.findFirst({ where, select: { id: true } }) : resource === 'articles' ? await tx.article.findFirst({ where, select: { id: true } }) : resource === 'links' ? await tx.managedLink.findFirst({ where, select: { id: true } }) : resource === 'events' ? await tx.event.findFirst({ where, select: { id: true } }) : resource === 'programs' ? await tx.program.findFirst({ where, select: { id: true } }) : null;
   if (!item) throw new HttpError(404, 'NOT_FOUND', 'المحتوى غير موجود أو غير متاح لهذا الحساب.');
 }
 export async function revokeUniversitySessions(tx: Prisma.TransactionClient, universityId: string) {

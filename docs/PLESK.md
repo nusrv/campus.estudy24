@@ -1,5 +1,7 @@
 # Plesk production deployment — campus.estudy24.com
 
+For the academic directory release, apply `202610220001_academic_programs` using [ACADEMIC-PROGRAMS.md](ACADEMIC-PROGRAMS.md). No seed, environment change or hosting adjustment is required.
+
 For the Ambassador release, apply the additive migration and follow [AMBASSADORS.md](AMBASSADORS.md). Hosting settings, `server.js`, environment variables and n8n requests remain unchanged.
 
 For the news-category update, run the explicit category seed described in [NEWS-CATEGORIES.md](NEWS-CATEGORIES.md). No new migration or hosting configuration change is required for that update.

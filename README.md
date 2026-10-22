@@ -1,5 +1,7 @@
 # eStudy24 Campus
 
+Academic degrees directory: [model, permissions, scoped ingestion contract and Plesk release](docs/ACADEMIC-PROGRAMS.md).
+
 University ambassadors: [roles, university isolation, Owner workflow and Plesk migration](docs/AMBASSADORS.md).
 
 Bulk news deletion: [permissions, safeguards, verification and Plesk update](docs/BULK-NEWS.md).

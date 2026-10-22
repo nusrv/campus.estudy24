@@ -79,6 +79,7 @@ model University {
   sources     IngestionSource[]
   events      Event[]
   programs    Program[]
+  academicPrograms AcademicProgram[]
   ads         AdvertisementUniversity[]
   links       ManagedLink[]
   administrators Administrator[]
@@ -375,6 +376,7 @@ model IngestionSource {
   articles     Article[]
   logs         IngestionLog[]
   contentSyncs ContentSync[]
+  academicPrograms AcademicProgram[]
 }
 
 // Provenance and protected fields for imports into existing non-news models.
@@ -453,4 +455,43 @@ model UploadedMedia {
   size         Int
   createdAt    DateTime @default(now())
   @@index([universityId])
+}
+
+// Degrees/majors directory, deliberately separate from time-bound training Program records.
+model AcademicProgram {
+  id String @id @default(cuid())
+  universityId String
+  university University @relation(fields: [universityId], references: [id], onDelete: Restrict)
+  title String
+  degreeName String?
+  college String?
+  department String?
+  campus String?
+  creditHours Float?
+  studyMode String?
+  tuitionInfo String?
+  tuitionVerified Boolean @default(false)
+  tuitionSourceUrl String?
+  description String?
+  sourceUrl String?
+  officialProgramUrl String?
+  studyPlanUrl String?
+  sourceId String?
+  source IngestionSource? @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  sourceSystem String?
+  externalId String?
+  sourceKey String? @unique
+  origin OriginType @default(manual)
+  lastSyncedAt DateTime?
+  fingerprint String?
+  sourceSnapshot Json?
+  editedFields String[] @default([])
+  status PublicationStatus @default(pending_review)
+  visible Boolean @default(true)
+  deletedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([universityId, sourceSystem, externalId])
+  @@index([universityId, status, visible, deletedAt])
+  @@index([universityId, degreeName, college])
 }

@@ -1,6 +1,7 @@
 import { linkKinds, platformTypes } from "@/lib/portal";
 export const CONTROL_PATH = "/portal-control-x7k92";
 export const adminSections = [
+  { key: 'academic-programs', title: 'التخصصات والبرامج الأكاديمية' },
   { key: 'platform-settings', title: 'إعدادات المنصة' },
   { key: 'api-docs', title: 'وثائق API والتكاملات' },
   { key: "administrators", title: "المشرفون" },
@@ -23,6 +24,14 @@ const publication: Field = { name: "status", label: "حالة النشر", type:
 const visible: Field = { name: "visible", label: "ظاهر في الموقع عند النشر", type: "checkbox" };
 const calendar: Field[] = [title, description, { name: "sourceUrl", label: "رابط المصدر الأصلي", type: "url" }, university, { name: "startsAt", label: "تاريخ ووقت البداية", type: "date", required: true }, { name: "endsAt", label: "تاريخ ووقت النهاية", type: "date" }, { name: "applicationUrl", label: "رابط التقديم", type: "url" }, publication, visible];
 export const fieldsByResource: Record<string, Field[]> = {
+  'academic-programs': [{ ...title, label: 'اسم البرنامج الأكاديمي' }, { ...university, label: 'الجامعة', required: true },
+    { name: 'degreeName', label: 'الدرجة بالنص الرسمي (لا تستنتجها)' }, { name: 'college', label: 'الكلية' },
+    { name: 'department', label: 'القسم' }, { name: 'campus', label: 'المقر أو المدينة' },
+    { name: 'creditHours', label: 'الساعات المعتمدة، إن توفرت', type: 'number' }, { name: 'studyMode', label: 'نمط الدراسة' },
+    { name: 'description', label: 'الوصف', type: 'textarea' }, { name: 'officialProgramUrl', label: 'رابط البرنامج الرسمي', type: 'url' },
+    { name: 'studyPlanUrl', label: 'رابط الخطة الدراسية الرسمي المؤكد فقط', type: 'url' }, { name: 'sourceUrl', label: 'رابط المصدر الرسمي', type: 'url' },
+    { name: 'tuitionInfo', label: 'معلومات الرسوم المؤكدة فقط', type: 'textarea' }, { name: 'tuitionSourceUrl', label: 'رابط مصدر التحقق من الرسوم', type: 'url' },
+    { name: 'tuitionVerified', label: 'تحققت من معلومات الرسوم في المصدر الرسمي (اتركه غير محدد عند غياب الرسوم)', type: 'checkbox' }, publication, visible],
   universities: [{ name: "autoPublishNews", label: "النشر التلقائي للأخبار — للمصادر الموثوقة فقط", type: "checkbox" }, { name: "telegramCommunityUrl", label: "رابط مجتمع eStudy24 على تيليجرام", type: "url" }, { name: "name", label: "اسم الجامعة", required: true }, { name: "slug", label: "المعرّف الفريد بالإنجليزية", required: true }, description, { name: "websiteUrl", label: "الموقع الرسمي", type: "url" }, { name: "logoUrl", label: "رابط الشعار أو رفعه", media: true }, { name: "enabled", label: "الجامعة مفعّلة", type: "checkbox" }],
   articles: [title, { ...university, label: "الجامعة", required: true }, { name: "summary", label: "الملخص", type: "textarea" }, { name: "description", label: "وصف الخبر", type: "textarea" }, { name: "content", label: "المحتوى النصّي", type: "textarea" }, { name: "categoryId", label: "التصنيف", type: "select", lookup: "categories" }, { name: "sourceUrl", label: "رابط المصدر الأصلي", type: "url" }, { name: "originalPublishedAt", label: "تاريخ النشر الأصلي (ليس موعد الفعالية)", type: "date" }, publication, visible, { name: "imageUrls", label: "روابط الصور — رابط في كل سطر", type: "lines", media: true }, { name: "pdfUrls", label: "روابط ملفات PDF — رابط في كل سطر", type: "lines", media: true }, { name: "registrationLinks", label: "روابط التسجيل — رابط في كل سطر", type: "lines" }],
   ads: [title, description, { name: "imageUrl", label: "صورة الإعلان", media: true }, { name: "destinationUrl", label: "رابط الوجهة", type: "url", required: true }, { name: "buttonText", label: "نص الزر", required: true }, { name: "global", label: "إعلان عام لكل الجامعات", type: "checkbox" }, { name: "universityIds", label: "الجامعات المستهدفة (عند إلغاء الخيار العام)", type: "multi", lookup: "universities" }, { name: "placementId", label: "موضع العرض", type: "select", options: placements, required: true }, { name: "priority", label: "الأولوية (الأعلى أولاً)", type: "number" }, { name: "startsAt", label: "بداية العرض", type: "date" }, { name: "endsAt", label: "نهاية العرض", type: "date" }, { name: "status", label: "الحالة", type: "select", options: [{ value: "active", label: "نشط" }, { value: "paused", label: "متوقف مؤقتًا" }, { value: "archived", label: "مؤرشف" }] }],

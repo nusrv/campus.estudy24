@@ -186,7 +186,7 @@ test('PostgreSQL + HTTP + browser: publication policies, structured ingestion, T
         try { for (const width of [390, 1440]) {
           const page = await browser.newPage({ viewport: { width, height: 900 } }); await page.goto(`${origin}/universities/${slug}?section=news`);
           const navigation = page.getByRole('navigation', { name: 'تصنيفات أخبار الجامعة', exact: true }); assert.equal(await navigation.getByRole('link').count(), 10);
-          assert.equal(await page.getByRole('navigation', { name: 'أقسام الجامعة', exact: true }).getByRole('link').count(), 8);
+          assert.equal(await page.getByRole('navigation', { name: 'أقسام الجامعة', exact: true }).getByRole('link').count(), 9);
           assert.equal(await navigation.getByRole('link', { name: 'الكل', exact: true }).getAttribute('aria-current'), 'page');
           await navigation.getByRole('link', { name: 'الدورات والتدريب', exact: true }).click(); await page.waitForURL('**category=training');
           assert.equal(await page.locator('form input[name="category"]').inputValue(), 'training');
