@@ -373,10 +373,39 @@ model IngestionSource {
   universityId String
   university   University     @relation(fields: [universityId], references: [id])
   enabled      Boolean        @default(true)
+  autoPublishAcademicPrograms Boolean @default(false)
   articles     Article[]
   logs         IngestionLog[]
   contentSyncs ContentSync[]
   academicPrograms AcademicProgram[]
+}
+
+// Private, expiring server-side selections. IDs/revisions never go to the browser in all-results mode.
+model AdminBulkSelection {
+  id String @id @default(cuid())
+  administratorId String
+  sessionId String
+  resource String
+  actorScope String
+  filters Json
+  records Json
+  count Int
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  confirmations AdminBulkConfirmation[]
+  @@index([createdAt])
+}
+
+model AdminBulkConfirmation {
+  id String @id @default(cuid())
+  selectionId String
+  selection AdminBulkSelection @relation(fields: [selectionId], references: [id], onDelete: Cascade)
+  action String
+  records Json
+  count Int
+  expiresAt DateTime
+  completedAt DateTime?
+  result Json?
 }
 
 // Provenance and protected fields for imports into existing non-news models.

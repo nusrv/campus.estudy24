@@ -1,5 +1,7 @@
 # eStudy24 Campus
 
+Unified administration bulk actions: [collection inventory, frozen cross-page selection, academic source policy, and Plesk steps](docs/BULK-ADMINISTRATION.md), [verification](docs/BULK-ADMINISTRATION-VERIFICATION.md).
+
 Academic degrees directory: [model, permissions, scoped ingestion contract and Plesk release](docs/ACADEMIC-PROGRAMS.md).
 
 Umm Al-Qura academic collector: [Arabic n8n import, dry-run and deliberate ingestion guide](integrations/n8n/uqu-academic/README.ar.md).

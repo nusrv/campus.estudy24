@@ -9,6 +9,7 @@ import { requireUniversityScope } from './integration-policy';
 import { HttpError, MAX_BATCH_SIZE, readJson } from './security';
 import { failure, json } from './http';
 import type { IngestResult } from './ingestion';
+import { academicPublicationDecision } from './academic-publication-policy';
 
 type Credential = { keyId: string; universityId: string; universitySlug: string };
 async function importAcademic(raw: unknown, credential: Credential, requestId: string, index: number): Promise<IngestResult> {
@@ -31,11 +32,12 @@ async function importAcademic(raw: unknown, credential: Credential, requestId: s
         if (new URL(source.url).hostname !== new URL(input.source_url).hostname) throw new HttpError(422, 'SOURCE_HOST_MISMATCH', 'رابط المصدر لا يطابق المضيف المضبوط.');
         const sourceKey = academicSourceKey(credential.universityId, source.key, input.source_id);
         const old = await tx.academicProgram.findUnique({ where: { sourceKey } });
+        const policy = academicPublicationDecision(source.autoPublishAcademicPrograms, input, !!old);
         const fingerprint = createHash('sha256').update(JSON.stringify(academicIncoming(input))).digest('hex');
         let outcome: IngestResult['outcome'] = 'unchanged';
         let item;
         if (!old) {
-          item = await tx.academicProgram.create({ data: { ...academicIncoming(input), universityId: credential.universityId, origin: 'imported', sourceId: source.id, sourceSystem: source.key, externalId: input.source_id, sourceKey, lastSyncedAt: new Date(), fingerprint, sourceSnapshot: input, status: 'pending_review' } });
+          item = await tx.academicProgram.create({ data: { ...academicIncoming(input), universityId: credential.universityId, origin: 'imported', sourceId: source.id, sourceSystem: source.key, externalId: input.source_id, sourceKey, lastSyncedAt: new Date(), fingerprint, sourceSnapshot: input, status: policy.publish ? 'published' : 'pending_review' } });
           outcome = 'created';
         } else {
           const fields = old.fingerprint !== fingerprint && !old.deletedAt ? Object.fromEntries(Object.entries(academicIncoming(input)).filter(([field]) => !old.editedFields.includes(field))) : {};
@@ -43,7 +45,8 @@ async function importAcademic(raw: unknown, credential: Credential, requestId: s
           // Status, visibility, deletedAt, source identity and university never come from the payload.
           item = await tx.academicProgram.update({ where: { id: old.id }, data: { ...fields, lastSyncedAt: new Date(), fingerprint, sourceSnapshot: input } });
         }
-        const decision = old?.deletedAt ? 'preserved_manual_deletion' : old ? 'preserved_publication_decision' : 'pending_academic_review';
+        const decision = old?.deletedAt ? 'preserved_manual_deletion' : policy.reason;
+        if (!old) await tx.auditLog.create({ data: { action: 'academic_import_publication_decision', entity: 'academic-programs', entityId: item.id, details: { universityId: credential.universityId, sourceId: source.id, decision, status: item.status, requestId } } });
         await tx.ingestionLog.create({ data: { requestId, sourceId: source.id, originalId: input.source_id, resourceType: 'academic-programs', resourceId: item.id, outcome, publicationDecision: decision } });
         return { index, resource_type: 'academic-programs', resource_id: item.id, outcome, publication: { status: item.status, decision } };
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 15000 });

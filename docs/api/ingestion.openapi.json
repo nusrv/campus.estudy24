@@ -444,7 +444,7 @@
       "post": {
         "operationId": "ingestAcademicPrograms",
         "summary": "Import university academic degrees and majors for review",
-        "description": "University-specific key required; legacy global key is not accepted. Single record or {items:[...]} with 1–50 records, maximum 1 MiB. Mixed-university batches are rejected before importing. 60 requests/min/key and client bucket. Required source_key, source_id, source_url, name. Scope derives from key; optional university_slug must match. University+source_key+source_id identifies each variant; never deduplicate by name. Manual fields/status/visibility/deletions survive imports; no absence-based deletion.",
+        "description": "University-specific key required; legacy global key is not accepted. Single record or {items:[...]} with 1–50 records, maximum 1 MiB. Mixed-university batches are rejected before importing. 60 requests/min/key and client bucket. Required source_key, source_id, source_url, name. Scope derives from key; optional university_slug must match. University+source_key+source_id identifies each variant; never deduplicate by name. Manual fields/status/visibility/deletions survive imports; no absence-based deletion. New records default to pending_review. Owners may enable source-specific autoPublishAcademicPrograms, independently of news: only new complete/trusted records with HTTPS official evidence and no suspicious markup may automatically publish. Existing pending, unpublished, hidden and deleted records never automatically republish; decisions are audited.",
         "security": [
           {
             "UniversityKey": []

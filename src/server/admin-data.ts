@@ -1,4 +1,5 @@
 import "server-only";
+import { managementQuery } from "./management-query";
 import { academicList, saveAcademic, deleteAcademic } from "./academic-programs";
 import { administratorAccess, contentPermission, universityScope, bindUniversity, scopedRecord, revokeUniversitySessions } from "./administrator-access";
 import { validateScopedMedia } from "./administrator-media";
@@ -32,46 +33,45 @@ async function protectSyncedFields(tx: Prisma.TransactionClient, resource: strin
 export async function adminList(resource: Resource, search: URLSearchParams, administratorId: string, sessionId?: string) {
   const actor = await administratorAccess(db, administratorId, false, sessionId);
   contentPermission(actor, resource);
-  const scope = universityScope(actor);
   if (actor.role === "ambassador" && [...search].some(([key, value]) => (key === "university" && value !== actor.university?.slug) || (["universityId", "university_id", "university_slug"].includes(key) && value !== actor.universityId))) throw new HttpError(403, "UNIVERSITY_SCOPE", "University filter is outside your assignment.");
   if (resource === "academic-programs") return academicList(db, search, actor);
-  const p = pagination(search);
+  const p = pagination(new URLSearchParams([...search].filter(([key]) => ["page", "page_size"].includes(key))));
+  const sharedWhere = ["logs", "audit"].includes(resource) ? {} : managementQuery(resource, search, actor).where;
   const args = { skip: p.skip, take: p.take };
-  const textSearch = p.search ? { contains: p.search, mode: "insensitive" as const } : undefined;
   let items: unknown[];
   let total: number;
   switch (resource) {
     case "platform_posts": {
-      const where: Prisma.PlatformPostWhereInput = { deletedAt: p.deleted === "true" ? { not: null } : null, ...(textSearch && { title: textSearch }), ...(p.status && { status: p.status }), ...(p.type && { type: p.type }), ...(p.category && { category: { slug: p.category } }) };
+      const where = sharedWhere as Prisma.PlatformPostWhereInput;
       [items, total] = await Promise.all([db.platformPost.findMany({ where, ...args, orderBy: { updatedAt: "desc" }, include: { category: true } }), db.platformPost.count({ where })]); break;
     }
     case "articles": {
-      const where: Prisma.ArticleWhereInput = { ...scope, deletedAt: p.deleted === "true" ? { not: null } : null, ...(p.status && { status: p.status }), ...(p.university && { university: { slug: p.university } }), ...(p.category && { category: { slug: p.category } }), ...(textSearch && { title: textSearch }), ...((p.from || p.to) && { discoveredAt: { ...(p.from && { gte: new Date(p.from) }), ...(p.to && { lte: new Date(p.to) }) } }) };
+      const where = sharedWhere as Prisma.ArticleWhereInput;
       [items, total] = await Promise.all([db.article.findMany({ where, ...args, orderBy: [{ discoveredAt: "desc" }, { id: "desc" }], include: { university: { select: { id: true, name: true, slug: true } }, category: true } }), db.article.count({ where })]); break;
     }
     case "universities": {
-      const where = textSearch ? { name: textSearch } : {};
+      const where = sharedWhere as Prisma.UniversityWhereInput;
       [items, total] = await Promise.all([db.university.findMany({ where, ...args, orderBy: { name: "asc" } }), db.university.count({ where })]); break;
     }
     case "ads": {
-      const where = textSearch ? { title: textSearch } : {};
+      const where = sharedWhere as Prisma.AdvertisementWhereInput;
       const records = await db.advertisement.findMany({ where, ...args, orderBy: { createdAt: "desc" }, include: { universities: true, placement: true, placementAssignments: true, metrics: { where: { day: { gte: new Date(Date.now() - 30 * 86400000) } } } } });
       items = records.map(a => ({ ...a, universityIds: a.universities.map(u => u.universityId), placementIds: a.placementAssignments.length ? a.placementAssignments.map(p => p.placementId) : [a.placementId] })); total = await db.advertisement.count({ where }); break;
     }
     case "links": {
-      const where = { ...scope, ...(textSearch ? { title: textSearch } : {}) };
+      const where = sharedWhere as Prisma.ManagedLinkWhereInput;
       [items, total] = await Promise.all([db.managedLink.findMany({ where, ...args, orderBy: { displayOrder: "asc" } }), db.managedLink.count({ where })]); break;
     }
     case "events": {
-      const where = { ...scope, ...(textSearch ? { title: textSearch } : {}) };
+      const where = sharedWhere as Prisma.EventWhereInput;
       [items, total] = await Promise.all([db.event.findMany({ where, ...args, orderBy: { startsAt: "desc" } }), db.event.count({ where })]); break;
     }
     case "programs": {
-      const where = { ...scope, ...(textSearch ? { title: textSearch } : {}) };
+      const where = sharedWhere as Prisma.ProgramWhereInput;
       [items, total] = await Promise.all([db.program.findMany({ where, ...args, orderBy: { startsAt: "desc" } }), db.program.count({ where })]); break;
     }
-    case "sources": [items, total] = await Promise.all([db.ingestionSource.findMany({ ...args, orderBy: { name: "asc" }, include: { university: true } }), db.ingestionSource.count()]); break;
-    case "categories": [items, total] = await Promise.all([db.articleCategory.findMany({ ...args, orderBy: { name: "asc" } }), db.articleCategory.count()]); break;
+    case "sources": [items, total] = await Promise.all([db.ingestionSource.findMany({ where: sharedWhere, ...args, orderBy: { name: "asc" }, include: { university: true } }), db.ingestionSource.count({ where: sharedWhere })]); break;
+    case "categories": [items, total] = await Promise.all([db.articleCategory.findMany({ where: sharedWhere, ...args, orderBy: { name: "asc" } }), db.articleCategory.count({ where: sharedWhere })]); break;
     case "logs": [items, total] = await Promise.all([db.ingestionLog.findMany({ ...args, orderBy: { createdAt: "desc" }, include: { source: { select: { name: true } } } }), db.ingestionLog.count()]); break;
     case "audit": [items, total] = await Promise.all([db.auditLog.findMany({ ...args, orderBy: { createdAt: "desc" }, include: { administrator: { select: { name: true } } } }), db.auditLog.count()]); break;
   }
@@ -98,6 +98,8 @@ export async function saveResource(resource: Resource, raw: unknown, administrat
   const save = async (tx: Prisma.TransactionClient) => {
     const actor = await administratorAccess(tx, administratorId, true, sessionId);
     contentPermission(actor, resource, 'write');
+    // PATCH must enforce the same deletion permission as DELETE and the bulk endpoint.
+    if (resource === 'articles' && raw && typeof raw === 'object' && 'action' in raw && raw.action === 'soft_delete') contentPermission(actor, resource, 'delete');
     if (recordId) await scopedRecord(tx, actor, resource, recordId);
     const input = bindUniversity(actor, raw);
     await validateScopedMedia(tx, actor, input);
@@ -180,6 +182,7 @@ export async function saveResource(resource: Resource, raw: unknown, administrat
       if (recordId) {
         const old = await tx.ingestionSource.findUnique({ where: { id: recordId }, include: { _count: { select: { articles: true, contentSyncs: true, academicPrograms: true } } } });
         if (old && (old._count.articles || old._count.contentSyncs || old._count.academicPrograms) && (old.key !== data.key || old.universityId !== data.universityId)) throw new HttpError(409, "SOURCE_IN_USE", "Source identity cannot change after ingestion.");
+        if (old && data.autoPublishAcademicPrograms !== undefined && old.autoPublishAcademicPrograms !== data.autoPublishAcademicPrograms) await tx.auditLog.create({ data: { administratorId, action: 'academic_source_policy_changed', entity: 'sources', entityId: recordId, details: { universityId: old.universityId, before: old.autoPublishAcademicPrograms, after: data.autoPublishAcademicPrograms } } });
       }
       item = recordId ? await tx.ingestionSource.update({ where: { id: recordId }, data }) : await tx.ingestionSource.create({ data });
     } else if (resource === "categories") {

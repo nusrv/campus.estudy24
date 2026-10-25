@@ -235,27 +235,28 @@ test('PostgreSQL + HTTP + browser: publication policies, structured ingestion, T
           const context = await browser.newContext({ viewport: { width, height: 900 } });
           const [name, value] = auth.cookie.split('='); await context.addCookies([{ name, value, url: origin + ADMIN_PATH }]);
           const page = await context.newPage(), url = `${origin}${ADMIN_PATH}/articles?search=${marker}&page_size=2`;
-          await page.goto(url); const all = page.getByRole('checkbox', { name: 'تحديد الكل', exact: true }), rows = page.getByRole('checkbox', { name: /^تحديد الخبر:/ });
-          assert.equal(await rows.count(), 2); assert.equal(await page.getByRole('button', { name: /^حذف المحدد/ }).count(), 0);
+          await page.goto(url); const all = page.getByRole('checkbox', { name: 'تحديد جميع سجلات الصفحة الحالية', exact: true }), rows = page.getByRole('checkbox', { name: /^تحديد السجل:/ });
+          assert.equal(await rows.count(), 2); await page.getByRole('combobox', { name: 'الإجراء الجماعي' }).selectOption('delete');
           await all.check(); assert.equal(await page.getByRole('button', { name: 'حذف المحدد (2)', exact: true }).count(), 1);
           await page.getByRole('button', { name: 'التالي', exact: true }).click(); await page.waitForURL('**page=2'); assert.equal(await rows.count(), 1); assert.equal(await rows.first().isChecked(), false);
-          await page.goto(url); await rows.first().check(); assert.equal(await all.evaluate(el => (el as HTMLInputElement).indeterminate), true); await rows.first().uncheck(); assert.equal(await all.isChecked(), false);
+          await page.goto(url); await page.getByRole('button', { name: 'مسح التحديد', exact: true }).click(); await rows.first().check(); assert.equal(await all.evaluate(el => (el as HTMLInputElement).indeterminate), true); await rows.first().uncheck(); assert.equal(await all.isChecked(), false);
           await all.check(); await all.uncheck(); assert.equal(await page.locator('input[type="checkbox"]:checked').count(), 0); await all.check();
-          page.once('dialog', async dialog => { assert.match(dialog.message(), /2/); await dialog.dismiss(); }); await page.getByRole('button', { name: 'حذف المحدد (2)', exact: true }).click();
+          await page.getByRole('combobox', { name: 'الإجراء الجماعي' }).selectOption('delete');
+          await page.getByRole('button', { name: 'حذف المحدد (2)', exact: true }).click(); await page.getByRole('dialog').waitFor(); assert.match(await page.getByRole('dialog').innerText(), /2/); await page.getByRole('dialog').getByRole('button', { name: 'إلغاء', exact: true }).click();
           assert.equal(await db.article.count({ where: { id: { in: fixtures.map(item => item.id) }, deletedAt: null } }), 3);
-          await page.route('**/api/articles/bulk-delete', route => route.abort());
-          page.once('dialog', dialog => dialog.accept()); await page.getByRole('button', { name: 'حذف المحدد (2)', exact: true }).click(); await page.getByRole('alert').filter({ hasText: 'تعذّر تأكيد نتيجة الحذف' }).waitFor();
-          assert.equal(await db.article.count({ where: { id: { in: fixtures.map(item => item.id) }, deletedAt: null } }), 3); assert.equal(await page.getByRole('button', { name: 'حذف المحدد (2)', exact: true }).count(), 1);
-          await page.unroute('**/api/articles/bulk-delete');
-          const response = page.waitForResponse(response => response.url().endsWith('/api/articles/bulk-delete') && response.request().method() === 'POST');
-          page.once('dialog', dialog => dialog.accept()); await page.getByRole('button', { name: 'حذف المحدد (2)', exact: true }).click(); assert.equal((await response).status(), 200);
-          await page.getByRole('status').filter({ hasText: 'تم نقل 2 خبرًا' }).waitFor(); await page.getByRole('status').filter({ hasText: 'الأخبار المحددة: 0' }).waitFor();
-          await page.waitForFunction(() => document.querySelectorAll('tbody input[type="checkbox"]').length === 1); assert.equal(await rows.first().isChecked(), false); assert.equal(await page.getByRole('button', { name: /^حذف المحدد/ }).count(), 0);
+          await page.route('**/api/bulk/articles', route => route.request().postDataJSON()?.op === 'execute' ? route.abort() : route.continue());
+          await page.getByRole('button', { name: 'حذف المحدد (2)', exact: true }).click(); await page.getByRole('dialog').waitFor(); await page.getByRole('button', { name: 'تأكيد التنفيذ على 2 سجلًا', exact: true }).click(); await page.getByRole('alert').filter({ hasText: 'تعذّر تأكيد النتيجة بسبب الاتصال' }).first().waitFor();
+          assert.equal(await db.article.count({ where: { id: { in: fixtures.map(item => item.id) }, deletedAt: null } }), 3);
+          await page.unroute('**/api/bulk/articles');
+          const response = page.waitForResponse(response => response.url().endsWith('/api/bulk/articles') && response.request().postDataJSON()?.op === 'execute');
+          await page.getByRole('button', { name: 'تأكيد التنفيذ على 2 سجلًا', exact: true }).click(); assert.equal((await response).status(), 200);
+          await page.getByRole('status').filter({ hasText: 'تم تنفيذ حذف المحدد على 2' }).waitFor(); await page.getByText('تم تحديد 0 سجلًا', { exact: true }).waitFor();
+          await page.waitForFunction(() => document.querySelectorAll('tbody input[type="checkbox"]').length === 1); assert.equal(await rows.first().isChecked(), false);
           assert.equal(await db.article.count({ where: { id: { in: fixtures.slice(0, 2).map(item => item.id) }, deletedAt: { not: null } } }), 2); assert.equal((await db.article.findUniqueOrThrow({ where: { id: fixtures[2].id } })).deletedAt, null);
-          await page.goto(`${origin}${ADMIN_PATH}/articles?search=${marker}&deleted=true`); assert.equal(await page.getByRole('checkbox', { name: 'تحديد الكل', exact: true }).count(), 0);
+          await page.goto(`${origin}${ADMIN_PATH}/articles?search=${marker}&deleted=true`); assert.equal(await page.getByRole('option', { name: 'حذف المحدد', exact: true }).count(), 0);
           await context.close();
         }
-        const context = await browser.newContext(); const [name, value] = editorAuth.cookie.split('='); await context.addCookies([{ name, value, url: origin + ADMIN_PATH }]); const page = await context.newPage(); await page.goto(`${origin}${ADMIN_PATH}/articles`); assert.equal(await page.getByRole('checkbox', { name: 'تحديد الكل', exact: true }).count(), 0); await context.close();
+        const context = await browser.newContext(); const [name, value] = editorAuth.cookie.split('='); await context.addCookies([{ name, value, url: origin + ADMIN_PATH }]); const page = await context.newPage(); await page.goto(`${origin}${ADMIN_PATH}/articles`); assert.equal(await page.getByRole('option', { name: 'حذف المحدد', exact: true }).count(), 0); await context.close();
       } finally { await browser.close(); }
     });
     await t.test('logo seed is repeatable and preserves uploaded logos and configured policies', async () => {
@@ -270,6 +271,7 @@ test('PostgreSQL + HTTP + browser: publication policies, structured ingestion, T
     await db.article.deleteMany({ where: { universityId: { in: ids } } });
     await db.managedLink.deleteMany({ where: { universityId: { in: ids } } }); await db.event.deleteMany({ where: { universityId: { in: ids } } }); await db.program.deleteMany({ where: { universityId: { in: ids } } });
     await db.universityApiKey.deleteMany({ where: { universityId: { in: ids } } }); await db.ingestionSource.deleteMany({ where: { universityId: { in: ids } } }); await db.university.deleteMany({ where: { id: { in: ids } } });
+    await db.adminBulkSelection.deleteMany({ where: { administratorId: { in: [owner.id, editor.id] } } });
     await db.auditLog.deleteMany({ where: { administratorId: { in: [owner.id, editor.id] } } }); await db.administrator.deleteMany({ where: { id: { in: [owner.id, editor.id] } } });
     if (priorSettings) { const { id: _id, ...data } = priorSettings; await db.siteSettings.update({ where: { id: 'main' }, data }); } else await db.siteSettings.deleteMany({ where: { id: 'main' } });
     await db.$disconnect();

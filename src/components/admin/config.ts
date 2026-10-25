@@ -56,4 +56,5 @@ fieldsByResource.platform_posts = [
 fieldsByResource.universities.splice(3, 0, { name: "city", label: "المدينة" }, { name: "region", label: "المنطقة" });
 fieldsByResource.ads = fieldsByResource.ads.map(field => field.name === "placementId" ? { name: "placementIds", label: "مواضع العرض — يمكن اختيار أكثر من موضع", type: "multi", options: placements, required: true } : field);
 fieldsByResource.links.push({ name: "kind", label: "نوع الخدمة أو المورد", type: "select", options: [...linkKinds], required: true });
+fieldsByResource.sources.push({ name: 'autoPublishAcademicPrograms', label: 'النشر التلقائي للتخصصات الأكاديمية — للسجلات الجديدة المكتملة من مصدر موثوق فقط؛ لا ينشر السجلات المعلّقة السابقة', type: 'checkbox' });
 for (const resource of ["events", "programs"]) fieldsByResource[resource] = fieldsByResource[resource].map(field => field.name === "universityId" ? { ...field, label: "الجامعة", required: true } : field);

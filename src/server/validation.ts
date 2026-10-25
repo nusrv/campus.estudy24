@@ -53,7 +53,7 @@ const validDates = (value: { startsAt: string; endsAt?: string | null }) => !val
 export const eventKind = z.enum(["event", "academic_date", "registration", "examination"]);
 export const eventSchema = z.object({ ...calendarFields, kind: eventKind.default("event") }).strict().refine(validDates, { path: ["endsAt"], message: "End date must follow start date." });
 export const programSchema = z.object(calendarFields).strict().refine(validDates, { path: ["endsAt"], message: "End date must follow start date." });
-export const sourceSchema = z.object({ key: slug, name: text(200).min(1), url, universityId: id, enabled: z.boolean().default(true) }).strict();
+export const sourceSchema = z.object({ key: slug, name: text(200).min(1), url, universityId: id, enabled: z.boolean().default(true), autoPublishAcademicPrograms: z.boolean().optional() }).strict();
 export const categorySchema = z.object({ name: text(100).min(1), slug }).strict();
 
 export const platformType = z.enum(["platform_news", "blog", "guide", "topic"]);
