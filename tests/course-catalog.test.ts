@@ -1,25 +1,26 @@
+import { coursePlainText, courseSummary } from '../src/server/course-text.ts';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseCourse, fetchCatalogInventory, CatalogSourceError } from '../src/server/course-source.ts';
-import { catalogSearch, coursePlainText, courseDisplayTitle, courseSummary, resolveCourseUniversity, trustedCourseUrl, VERIFIED_COURSE_MAPPINGS } from '../src/lib/course-catalog.ts';
+import { catalogSearch, resolveCourseUniversity, trustedCourseUrl, VERIFIED_COURSE_MAPPINGS } from '../src/lib/course-catalog.ts';
 export const sampleCourse = (id = 1) => ({ id, status: 'publish', title: { rendered: 'أسس الرياضيات MAT 1153' }, content: { rendered: '<p>شرح تعليمي</p>' }, excerpt: { rendered: '<p>شرح للمفاهيم الأساسية.</p>' }, slug: `sample-${id}`, link: `https://estudy24.com/courses/sample-${id}/`, modified_gmt: '2026-10-20T10:00:00', 'course-category': [227], featured_media: 10, _embedded: { 'wp:featuredmedia': [{ id: 10, source_url: 'https://estudy24.com/wp-content/uploads/sample.png', media_details: { sizes: { medium: { source_url: 'https://estudy24.com/wp-content/uploads/sample-300.png' } } } }] } });
 const category = { id: 227, name: 'جامعة أم القرى', slug: 'uqu', parent: 0, count: 101 };
 const response = (rows: unknown[], total: number, status = 200) => new Response(JSON.stringify(rows), { status, headers: { 'x-wp-totalpages': String(Math.ceil(total/100)), 'x-wp-total': String(total) } });
 test('published source parsing keeps identity, plain description and appropriate embedded featured image', () => {
-  const c = parseCourse(sampleCourse()); assert.equal(c.wordpressId, 1); assert.equal(c.title, 'أسس الرياضيات'); assert.equal(c.sourceTitle, 'أسس الرياضيات MAT 1153'); assert.match(c.description, /مفاهيم/); assert.equal(c.imageUrl, 'https://estudy24.com/wp-content/uploads/sample-300.png'); assert.equal(c.sourceModifiedAt.toISOString(), '2026-10-20T10:00:00.000Z');
+  const c = parseCourse(sampleCourse()); assert.equal(c.wordpressId, 1); assert.equal(c.title, 'أسس الرياضيات MAT 1153'); assert.equal(c.sourceTitle, 'أسس الرياضيات MAT 1153'); assert.match(c.description, /مفاهيم/); assert.equal(c.imageUrl, 'https://estudy24.com/wp-content/uploads/sample-300.png'); assert.equal(c.sourceModifiedAt.toISOString(), '2026-10-20T10:00:00.000Z');
   assert.equal(parseCourse({ ...sampleCourse(), _embedded: {} }).imageUrl, null);
   assert.equal(parseCourse({ ...sampleCourse(), _embedded: { 'wp:featuredmedia': [{ id: 10, source_url: 'https://evil.invalid/x.png' }] } }).imageUrl, null);
   assert.throws(() => parseCourse({ ...sampleCourse(), status: 'draft' })); assert.throws(() => parseCourse({ ...sampleCourse(), title: { rendered: 'secret', protected: true } })); assert.throws(() => parseCourse({ ...sampleCourse(), link: 'https://estudy24.com.evil.invalid/' }));
 });
-test('HTML is inert text; price and course-code fragments are absent from public display', () => {
+test('HTML is inert text and commercial material is excluded from summaries', () => {
   assert.equal(coursePlainText('<script>alert(1)</script><p>شرح &amp; &#1571; <img src=x onerror=alert(1)></p>'), 'شرح & أ');
-  assert.equal(courseDisplayTitle('رياضيات -MATH 101-'), 'رياضيات'); assert.equal(courseSummary('اشتراك 175 ريال. شرح المفاهيم الأساسية.'), 'شرح المفاهيم الأساسية.');
+  assert.equal(courseSummary('اشتراك 175 ريال. شرح المفاهيم الأساسية.'), 'شرح المادة متوفر على منصة eStudy24.');
   for (const url of ['javascript:alert(1)', 'https://evil.invalid/x', 'https://user:pass@estudy24.com/x', 'http://estudy24.com/x', 'https://estudy24.com:8443/x', 'https://estudy24.com/x?secret=x']) assert.equal(trustedCourseUrl(url), null);
   assert.equal(trustedCourseUrl('https://estudy24.com/wp-content/uploads/x.svg', true), null);
 });
 test('Arabic and English normalization preserves useful search without changing source text', () => { assert.equal(catalogSearch(' أُسُس  الإحصاء '), catalogSearch('اسس الاحصاء')); assert.equal(catalogSearch('Calculus II'), 'calculus ii'); });
-test('reverse course-code variants and Arabic numerals are formatted for public display', () => { assert.equal(courseDisplayTitle('كيمياء الكم 447CHEM'), 'كيمياء الكم'); assert.equal(courseDisplayTitle('القسم ٢ - CHEM ١٠١'), 'القسم 2'); assert.equal(courseDisplayTitle('شرح أساسي 175 ريال'), 'شرح أساسي'); });
+test('complete title punctuation, course codes and source digits are preserved', () => { for (const title of ['رياضيات -MATH 101-', 'كيمياء الكم 447CHEM', 'القسم ٢ - CHEM ١٠١', 'جبر خطي (MTH1441) -القسم الثاني', '(EE2102T) دوائر الكترونية -القسم الاول']) assert.equal(parseCourse({...sampleCourse(),title:{rendered:title}}).title,title); });
 test('only explicit verified category mappings assign universities; subjects never infer assignments', () => {
   assert.equal(VERIFIED_COURSE_MAPPINGS.length, 7); const mappings = [{ categoryId: 227, universityId: 'u1', enabled: true }, { categoryId: 375, universityId: 'u2', enabled: true }, { categoryId: 99, universityId: 'u1', enabled: false }];
   assert.deepEqual(resolveCourseUniversity([227, 310], mappings), { universityId: 'u1', mappingState: 'mapped' }); assert.equal(resolveCourseUniversity([310], mappings).mappingState, 'unknown'); assert.equal(resolveCourseUniversity([227,375], mappings).mappingState, 'ambiguous'); assert.equal(resolveCourseUniversity([99], mappings).universityId, null);

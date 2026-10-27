@@ -1,19 +1,20 @@
 import { z } from 'zod/v4';
-import { coursePlainText, courseDisplayTitle, courseSummary, catalogSearch, trustedCourseUrl } from '../lib/course-catalog.ts';
+import { catalogSearch, trustedCourseUrl } from '../lib/course-catalog.ts';
+import { coursePlainText, courseSummary } from './course-text.ts';
 export class CatalogSourceError extends Error { code: string; constructor(code: string) { super(code); this.code = code; } }
 const rendered = z.object({ rendered: z.string().max(500000), protected: z.boolean().optional() });
 const wpId = z.number().int().positive().max(2147483647);
 const courseSchema = z.object({ id: wpId, status: z.literal('publish'), title: rendered, content: rendered.optional(), excerpt: rendered.optional(), link: z.string(), slug: z.string().max(1000), modified_gmt: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?$/), featured_media: z.number().int().nonnegative().max(2147483647).optional(), 'course-category': z.array(wpId).max(100), _embedded: z.record(z.string(), z.unknown()).optional() });
 const categorySchema = z.object({ id: wpId, name: z.string().max(1000), slug: z.string().max(1000), parent: z.number().int().nonnegative().max(2147483647), count: z.number().int().nonnegative() });
 export function parseCourse(value: unknown) {
-  const c = courseSchema.parse(value), sourceTitle = coursePlainText(c.title.rendered).slice(0, 500), destinationUrl = trustedCourseUrl(c.link);
+  const c = courseSchema.parse(value), sourceTitle = coursePlainText(c.title.rendered), destinationUrl = trustedCourseUrl(c.link);
   const sourceModifiedAt = new Date(c.modified_gmt.endsWith('Z') ? c.modified_gmt : c.modified_gmt + 'Z');
   if (!sourceTitle || !destinationUrl || Number.isNaN(sourceModifiedAt.getTime()) || c.title.protected || c.content?.protected || c.excerpt?.protected) throw new CatalogSourceError('INVALID_COURSE');
   const media = z.array(z.object({ id: z.number().optional(), source_url: z.string().optional(), media_details: z.object({ sizes: z.record(z.string(), z.object({ source_url: z.string().optional() })).optional() }).optional() })).safeParse(c._embedded?.['wp:featuredmedia']);
   const featured = media.success ? media.data.find(m => !c.featured_media || m.id === c.featured_media) : undefined;
   const imageUrl = trustedCourseUrl(featured?.media_details?.sizes?.medium_large?.source_url, true) || trustedCourseUrl(featured?.media_details?.sizes?.medium?.source_url, true) || trustedCourseUrl(featured?.source_url, true);
-  const description = courseSummary(coursePlainText(c.excerpt?.rendered || c.content?.rendered || ''));
-  return { wordpressId: c.id, sourceTitle, title: courseDisplayTitle(sourceTitle), description, searchText: catalogSearch(sourceTitle), destinationUrl, imageUrl, categoryIds: [...new Set(c['course-category'])].sort((a,b) => a-b), sourceModifiedAt };
+  const description = courseSummary(c.content?.rendered || '', c.excerpt?.rendered || '');
+  return { wordpressId: c.id, sourceTitle, title: sourceTitle, description, searchText: catalogSearch(sourceTitle), destinationUrl, imageUrl, categoryIds: [...new Set(c['course-category'])].sort((a,b) => a-b), sourceModifiedAt };
 }
 export type SourceCourse = ReturnType<typeof parseCourse>;
 export type CatalogInventory = { courses: SourceCourse[]; categories: z.infer<typeof categorySchema>[] };

@@ -1,4 +1,61 @@
-# Course catalog verification — 27 October 2026
+# Course catalog fidelity and compact cards — 27 October 2026
+
+Starting revision: `aad310316b4579dd7f0be9f7397516c82f2b7e48`, clean `main`, equal to `origin/main` before editing. This section supersedes the initial catalog rollout's title/description expectations below. Operations guide: [COURSE-CATALOG.md](COURSE-CATALOG.md).
+
+## Confirmed root causes
+
+The complete path was inspected: public WordPress REST response → `parseCourse` → unconditional `CourseExplanation` upsert by WordPress ID → public field selection → React card. The previous `courseDisplayTitle` deleted codes and empty parentheses/dashes before persistence; `parseCourse` also sliced titles at 500 characters. Public responses selected that altered `title`. The longest live title was 82 characters: code removal caused the observed losses; the length cap was an additional risk for future long titles.
+
+WordPress flattened paragraphs/anchors into `excerpt.rendered`, including `الدعم الفني<a href="https://t.me/eStudy_24">…</a>` becoming adjacent contact text and URL. The old pipeline preferred that excerpt, removed HTML structure with regex, then split on every period, including dots in `youtu.be` and `t.me`. It dropped commercial/code-containing segments and retained domain fragments. Full-width 4:3 images in vertical three-column cards caused the oversized layout.
+
+The new server-only `course-text.ts` uses `parse5@8.0.1` for inert HTML5 parsing (`entities` is its sole added transitive dependency). Titles retain decoded source punctuation, numbers, codes and section labels, with whitespace normalization only. Structured content introductions are preferred; an appropriate excerpt is a fallback. Block/line boundaries and anchor context are retained; URLs are recognized before sentence selection. Sales/support/refund/boilerplate text is excluded without confusing academic terms such as graphs, momentum, information retrieval, sets or support vectors. Unsuitable descriptions receive exactly **شرح المادة متوفر على منصة eStudy24.** Nothing is executed, rewritten upstream or rendered as imported HTML.
+
+## Verified real-source data and repair
+
+Unauthenticated, read-only WordPress requests succeeded for the complete **197-record** catalog. All records normalized, with **194 introductions**, **3 explicit fallbacks**, and **0 summaries retaining the checked URL/support/subscription/price fragments**. The three fallback records had two empty descriptions and one placeholder `text` description. Titles were not invented or renamed.
+
+| WordPress ID | Baseline result | Corrected result |
+| --- | --- | --- |
+| 31006 | جبر خطي -القسم الثاني | جبر خطي (MTH1441) -القسم الثاني |
+| 29168 | دوائر الكترونية -القسم الاول | (EE2102T) دوائر الكترونية -القسم الاول |
+| 22239 | معادلات تفاضلية و جبر خطي -القسم الاول | Same complete original title |
+| 8277 | كيمياء الكم | كيمياء الكم 447CHEM |
+| 9182 — description | `be/2o2ptwAGP6Y?si=…– التواصل مع الدعم الفنيhttps://t. me/eStudy_24` | تتضمن هذه الدروس شرح مقرر الكيمياء الحيوية |
+
+`verified-description-html.json` retains six representative public records with actual source HTML/provenance. `baseline-transform.json` was computed using the deployed baseline's unchanged functions, not guessed failure strings. No credentials/private student data are included. ID 9182 had unmapped category 287 in this capture: no university relationship was invented for the example. Its cleaned source record stays excluded publicly until the Owner explicitly maps its category.
+
+A separate **disposable loopback database** was populated with all 197 real records using the baseline transformations. One authorized Owner synchronization with a fresh actual public inventory preserved **all 197 internal IDs**, restored **36 titles**, and recomputed **194 descriptions**, with no duplicates or mapping changes. Results stayed **166 mapped / 31 unknown / 0 ambiguous**. This verifies the normal synchronization path repairs existing records even without an upstream modification timestamp change. No production database or Campus ingestion endpoint was accessed.
+
+## Compact layout and test coverage
+
+Both public views share `CourseCard`: 56×42 thumbnails on narrow cards, 96×72 on sufficiently wide cards, `object-fit: contain`, existing missing/failed-image fallback, modest padding and direct **عرض الشرح** links. Card-width container queries place the CTA in a consistent side column on desktop and footer row on narrow cards. Auto-fit produces two columns only when the actual content area fits them, including university pages with advertisement sidebars. Full titles wrap without clamping/ellipsis; descriptions alone clamp to two visual lines while retaining accessible text. Exceptionally long titles can increase their own card height; neighboring cards do not stretch into empty panels.
+
+Browser coverage uses **320, 360, 390, 768 and 1440px** on `/courses` and university course views. It checks full real titles, uncut long titles, full-title/code search, two wide-screen columns, normal-card bounds below 220px on wide cards and 330px on narrow test cards, thumbnails below 100×76, RTL placement, no horizontal overflow, original safe destinations, actionable links, exact fallback and no browser WordPress REST requests. Remote images use test bytes to avoid repeatedly downloading the source catalog; existing tests separately cover cached image failures.
+
+An additional **built-production-server** browser probe used the complete real-source local catalog and actual remote course images, without interception. Both public views passed at **320, 390 and 1440px**; the 12 displayed UQU cards had maximum article heights of **228, 204 and 130px**, respectively. Images loaded successfully in every view (off-screen lazy images were not all requested); desktop and mobile screenshots were inspected. UQU public API returned **92** correctly scoped courses, embedded-code searches returned complete titles, summaries contained no checked URL fragments, and browsers made no WordPress REST requests. This checks local production mode, not the live Campus deployment.
+
+Unit coverage includes codes in both orders, mixed Arabic/English, Unicode/named/numeric entities, inline emphasis, malformed tags, adjacent anchors, bare/spaced URL fragments, content-versus-excerpt selection, sales/support/refunds, academic terminology, unsafe/hidden elements, decimals, word boundaries and fallback. Database/HTTP tests verify repaired persistence, unchanged IDs/timestamps/destinations, mapping/publication preservation, unknown exclusions, repeated imports and an untouched independent academic record.
+
+Current checks (Windows, Node.js 22.14, Next.js 16.4.2, Prisma 7.9.1, Edge, isolated PostgreSQL **18**):
+
+| Check | Result |
+| --- | --- |
+| `npm test` | 78 passed, 0 failed/skipped |
+| `npm run test:integration` — complete fresh-database run | 87 passed, 0 failed/skipped, including accounts, Ambassador isolation, ingestion, academic programs, bulk actions, advertisements, keys, counters, existing catalog behavior and the new fidelity suite |
+| Focused `tests/integration/course-fidelity.test.ts` | 5 passed, 0 failed/skipped |
+| Actual-source full-catalog normalization and local repair | Passed, as detailed above |
+| `npm run lint` | Passed |
+| `npm run db:validate` | Passed |
+| `npm run typecheck` | Passed |
+| `npm run build` | Passed, including Prisma generation and Next.js production TypeScript/static generation |
+| `npm run verify:production` | Passed through unchanged `server.js`: 11 CSS/JS/preload assets, 24 font requests, 5 private-file denials; no copying |
+| Built-server real-source API/browser/image checks | Passed on both public views at 320/390/1440px; visual inspection passed |
+
+Production PostgreSQL 17/Plesk/Passenger are unavailable locally and remain operator checks. **No Prisma migration, seed, new environment variable, credential or schedule change is required.** After Plesk Pull/Deploy, run `npm ci --include=dev`, `npm run build`, then **Restart App** and one normal Owner **مزامنة الآن** (or await the next successful six-hour run). Existing complete-inventory, transaction, lease and removal safeguards remain intact. No production deployment, migration or database write was performed. Future nonstandard descriptions may conservatively receive the fallback instead of speculative text; very long titles intentionally remain fully readable.
+
+## Historical initial rollout — baseline only
+
+The following records the earlier `aad3103` implementation checks, not the correction's current test run or title policy.
 
 Starting revision: `ff5d660e6f60f08305a9fbf6ab3dc70654f23851`, clean `main`, synchronized with `origin/main` before implementation. See [the Arabic deployment and operations guide](COURSE-CATALOG.md).
 
