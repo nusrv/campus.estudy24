@@ -16,6 +16,7 @@ const allowed: Record<string, string[]> = {
   links: ['search', 'university', 'status', 'category', 'kind', 'active'], ads: ['search', 'status'],
   universities: ['search', 'enabled'], sources: ['search', 'university', 'enabled'], categories: ['search'],
   administrators: ['search', 'role', 'active', 'university'], 'api-keys': ['university', 'revoked'],
+  'course-mappings': ['university', 'enabled'],
 };
 export function managementQuery(resource: string, search: URLSearchParams, actor: AdministratorAccess) {
   const raw = Object.fromEntries(search);
@@ -26,7 +27,7 @@ export function managementQuery(resource: string, search: URLSearchParams, actor
   if (parsed.from && parsed.to && new Date(parsed.from) > new Date(parsed.to)) throw new HttpError(422, 'INVALID_FILTER', 'تاريخ البداية يجب ألا يتجاوز تاريخ النهاية.');
   if (parsed.status && !['ads'].includes(resource) && !status.safeParse(parsed.status).success) throw new HttpError(422, 'INVALID_FILTER', 'حالة التصفية غير صالحة لهذا القسم.');
   if (resource === 'ads' && parsed.status && !['active', 'paused', 'archived'].includes(parsed.status)) throw new HttpError(422, 'INVALID_FILTER', 'حالة الإعلان غير صالحة.');
-  if (['administrators', 'api-keys'].includes(resource) && actor.role !== 'owner') throw new HttpError(403, 'FORBIDDEN', 'هذا القسم متاح لمدير المنصة فقط.');
+  if (['administrators', 'api-keys', 'course-mappings'].includes(resource) && actor.role !== 'owner') throw new HttpError(403, 'FORBIDDEN', 'هذا القسم متاح لمدير المنصة فقط.');
   if (resource === 'api-keys' && !parsed.university) throw new HttpError(422, 'UNIVERSITY_REQUIRED', 'حدد جامعة المفاتيح.');
   const where: Record<string, unknown> = ['articles', 'academic-programs', 'events', 'programs', 'links'].includes(resource) ? { ...universityScope(actor) } : {};
   if (parsed.search) where[resource === 'universities' || ['sources', 'categories'].includes(resource) ? 'name' : 'title'] = { contains: parsed.search, mode: 'insensitive' };

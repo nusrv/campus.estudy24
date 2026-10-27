@@ -123,7 +123,7 @@ test('PostgreSQL + HTTP + browser: academic directory, variant imports, editoria
           const context = await browser.newContext({ viewport: mobile ? { width: 390, height: 844 } : { width: 1440, height: 1000 }, isMobile: mobile, hasTouch: mobile }); const page = await context.newPage();
           await page.goto(`${origin}/universities/${university.slug}?section=academic-programs`);
           await page.getByRole('heading', { name: 'التخصصات والبرامج الأكاديمية', exact: true }).waitFor();
-          const tabs = page.getByRole('navigation', { name: 'أقسام الجامعة' }).locator('a'); assert.equal(await tabs.count(), 9);
+          const tabs = page.getByRole('navigation', { name: 'أقسام الجامعة' }).locator('a'); assert.equal(await tabs.count(), 10);
           assert.deepEqual((await tabs.evaluateAll(nodes => nodes.map(node => new URL((node as HTMLAnchorElement).href).searchParams.get('section')))).slice(0, 8), ['all', 'news', 'programs', 'events', 'calendar', 'schedules', 'services', 'links']);
           await page.getByLabel('اسم البرنامج', { exact: true }).fill('برنامج يدوي توضيحي'); await page.getByRole('button', { name: 'بحث وتصفية', exact: true }).click(); await page.getByRole('heading', { name: 'برنامج يدوي توضيحي', exact: true }).waitFor();
           assert.equal(await page.getByRole('link', { name: 'الخطة الدراسية', exact: true }).getAttribute('href'), 'https://uqu.edu.sa/plan'); assert.equal(await page.getByRole('link', { name: 'الخطة الدراسية', exact: true }).getAttribute('rel'), 'noopener noreferrer');

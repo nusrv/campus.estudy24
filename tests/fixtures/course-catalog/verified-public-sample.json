@@ -1,0 +1,53 @@
+{
+  "provenance": {
+    "source": "https://estudy24.com/wp-json/wp/v2/courses?per_page=2&_embed",
+    "fetchedAt": "2026-10-27",
+    "purpose": "Two public source records, minimal parsing fixture. No enrollment, author, pricing, lesson or credential data."
+  },
+  "records": [
+    {
+      "id": 31425,
+      "title": {
+        "rendered": "اسس رياضيات -MAT 1153- (القسم الثاني)"
+      },
+      "link": "https://estudy24.com/courses/2-mat-1153/",
+      "status": "publish",
+      "slug": "2-mat-1153",
+      "modified_gmt": "2026-10-27T10:04:02",
+      "course-category": [
+        375
+      ],
+      "featured_media": 31108,
+      "_embedded": {
+        "wp:featuredmedia": [
+          {
+            "id": 31108,
+            "source_url": "https://estudy24.com/wp-content/uploads/2026/09/foundation-300x225.png"
+          }
+        ]
+      }
+    },
+    {
+      "id": 29810,
+      "title": {
+        "rendered": "MATH-001 &#8211; القسم الثاني"
+      },
+      "link": "https://estudy24.com/courses/math-001-2/",
+      "status": "publish",
+      "slug": "math-001-2",
+      "modified_gmt": "2026-10-27T09:22:37",
+      "course-category": [
+        310
+      ],
+      "featured_media": 29116,
+      "_embedded": {
+        "wp:featuredmedia": [
+          {
+            "id": 29116,
+            "source_url": "https://estudy24.com/wp-content/uploads/2026/08/MAT001-300x210.png"
+          }
+        ]
+      }
+    }
+  ]
+}

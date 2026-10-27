@@ -85,6 +85,74 @@ model University {
   administrators Administrator[]
   uploads UploadedMedia[]
   apiKeys     UniversityApiKey[]
+  courseMappings CourseUniversityMapping[]
+  courseExplanations CourseExplanation[]
+}
+
+// Source-managed eStudy24 explanations, unrelated to academic degrees or ingestion tombstones.
+model CourseExplanation {
+  id String @id @default(cuid())
+  wordpressId Int @unique
+  sourceTitle String
+  title String
+  description String @default("")
+  searchText String
+  destinationUrl String
+  imageUrl String?
+  categoryIds Int[]
+  sourceModifiedAt DateTime
+  sourcePublished Boolean @default(true)
+  mappingState String @default("unknown")
+  universityId String?
+  university University? @relation(fields: [universityId], references: [id], onDelete: Restrict)
+  lastSyncedAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([universityId, sourcePublished, mappingState, title], map: "CourseExplanation_public_idx")
+}
+
+model CourseSourceCategory {
+  id Int @id
+  name String
+  slug String
+  parent Int
+  courseCount Int
+  lastSyncedAt DateTime
+}
+
+model CourseUniversityMapping {
+  id String @id @default(cuid())
+  categoryId Int @unique
+  universityId String
+  university University @relation(fields: [universityId], references: [id], onDelete: Restrict)
+  enabled Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CourseCatalogSettings {
+  id String @id @default("main")
+  enabled Boolean @default(false)
+  lastSuccessfulSyncAt DateTime?
+  leaseToken String?
+  leaseUntil DateTime?
+  updatedAt DateTime @updatedAt
+}
+
+model CourseSyncRun {
+  id String @id @default(cuid())
+  trigger String
+  status String @default("running")
+  errorCode String?
+  inventoryDigest String?
+  fetched Int @default(0)
+  mapped Int @default(0)
+  unknown Int @default(0)
+  ambiguous Int @default(0)
+  removed Int @default(0)
+  startedAt DateTime @default(now())
+  finishedAt DateTime?
+  @@index([startedAt])
 }
 
 model ArticleCategory {

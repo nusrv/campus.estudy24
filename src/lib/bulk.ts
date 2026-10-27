@@ -1,12 +1,12 @@
 export const BULK_LIMIT = 5000;
-export const bulkResources = ['articles', 'academic-programs', 'platform_posts', 'events', 'programs', 'links', 'ads', 'universities', 'sources', 'categories', 'administrators', 'api-keys'] as const;
+export const bulkResources = ['articles', 'academic-programs', 'platform_posts', 'events', 'programs', 'links', 'ads', 'universities', 'sources', 'categories', 'administrators', 'api-keys', 'course-mappings'] as const;
 export type BulkResource = typeof bulkResources[number];
 export const actionLabels = { publish: 'نشر المحدد', unpublish: 'إلغاء نشر المحدد', hide: 'إخفاء المحدد', restore: 'استعادة المحدد', delete: 'حذف المحدد', enable: 'تفعيل المحدد', disable: 'تعطيل المحدد', activate: 'تنشيط المحدد', pause: 'إيقاف المحدد', archive: 'أرشفة المحدد', revoke: 'إلغاء المفاتيح المحددة' } as const;
 export type BulkAction = keyof typeof actionLabels;
 export function bulkActions(resource: string, role: string): BulkAction[] {
   if (!['owner', 'editor', 'ambassador'].includes(role)) return [];
   if (role === 'ambassador' && !['articles', 'academic-programs', 'events', 'programs', 'links'].includes(resource)) return [];
-  if (['universities', 'sources', 'administrators'].includes(resource)) return role === 'owner' ? ['enable', 'disable'] : [];
+  if (['universities', 'sources', 'administrators', 'course-mappings'].includes(resource)) return role === 'owner' ? ['enable', 'disable'] : [];
   if (resource === 'api-keys') return role === 'owner' ? ['revoke'] : [];
   if (resource === 'categories') return role === 'owner' ? ['delete'] : [];
   const deletion: BulkAction[] = role === 'editor' ? [] : ['delete'];

@@ -12,5 +12,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const [universities, posts, news] = await Promise.all([db.university.findMany({ where: { enabled: true }, take: 10000, select: { slug: true, updatedAt: true } }), db.platformPost.findMany({ where: platformVisibility, take: 10000, select: { slug: true, updatedAt: true } }), db.article.findMany({ where: publishedArticleWhere, take: 10000, select: { id: true, updatedAt: true, university: { select: { slug: true } } } })]);
     return [...universities.map(u => ({ url: url(`/universities/${u.slug}`), lastModified: u.updatedAt })), ...posts.map(p => ({ url: url(`/articles/${p.slug}`), lastModified: p.updatedAt })), ...news.map(n => ({ url: url(`/universities/${n.university.slug}/news/${n.id}`), lastModified: n.updatedAt }))];
   });
-  return ["/", "/universities", "/articles"].map(path => ({ url: url(path) })).concat(data || []);
+  return ["/", "/universities", "/articles", "/courses"].map(path => ({ url: url(path) })).concat(data || []);
 }

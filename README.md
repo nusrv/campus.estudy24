@@ -1,5 +1,7 @@
 # eStudy24 Campus
 
+Public eStudy24 course catalog: [Arabic setup, mapping, synchronization and Plesk schedule](docs/COURSE-CATALOG.md), [verification](docs/COURSE-CATALOG-VERIFICATION.md).
+
 Unified administration bulk actions: [collection inventory, frozen cross-page selection, academic source policy, and Plesk steps](docs/BULK-ADMINISTRATION.md), [verification](docs/BULK-ADMINISTRATION-VERIFICATION.md).
 
 Academic degrees directory: [model, permissions, scoped ingestion contract and Plesk release](docs/ACADEMIC-PROGRAMS.md).

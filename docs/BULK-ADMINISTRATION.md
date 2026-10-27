@@ -18,10 +18,13 @@ This release extends the existing private dashboard. It adds no public accounts,
 | Shared categories (`categories`) | Delete unused categories | Owner only; any association with university or platform content rejects the entire deletion. No published articles are reclassified or detached. Category names/slugs remain individually editable. |
 | Administrator / Editor / Ambassador cards (`administrators`) | Enable, disable | Owner only; typed confirmation. No bulk deletion, role reassignment or password reset. Self-disable and removal of the last active Owner are rejected. Disabled accounts lose sessions and reset authorizations. |
 | University integration active-key list (`api-keys`) | Revoke | Owner only, one explicit university; typed irreversible confirmation. Returned data contains no hashes/secrets. Revoked-key history is read-only and has no meaningless checkbox. Current key creation/rotation remains individual. |
+| eStudy24 course-category university mappings (`course-mappings`) | Enable, disable | Owner only. Reuses filters, snapshots and typed confirmation, then re-evaluates local course assignments atomically. No university creation or academic-program mutation. See [COURSE-CATALOG.md](COURSE-CATALOG.md). |
 
 The following were audited and deliberately remain unselectable: overview metrics/recent-content summaries, ingestion logs, audit history, API documentation, settings forms, visitor statistics, login/setup/reset forms and lookup options (placements, universities in dropdowns, media form inputs). They have no record-level management actions. Uploaded media has no standalone management list: uploads are controlled form operations; the authenticated file reader is not a media-management collection. The audit did not find any other manageable dashboard list.
 
 The same selection hook, page selector, per-record checkbox, action policy, toolbar and confirmation dialog are used by standard tables, administrator cards and active integration keys. Editors do not receive checkboxes on collections for which they have no bulk write capability. Read-only screens remain read-only.
+
+The course synchronization history, unmapped-course diagnostic sample and mirrored WordPress category choices are read-only. Course records are source-managed, with no individual manual editing/deletion; their management operations are explicit category mappings and guarded complete synchronization, rather than academic/news tombstones.
 
 ## Selection contract and consistency
 

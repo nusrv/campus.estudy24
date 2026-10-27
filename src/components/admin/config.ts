@@ -1,6 +1,7 @@
 import { linkKinds, platformTypes } from "@/lib/portal";
 export const CONTROL_PATH = "/portal-control-x7k92";
 export const adminSections = [
+  { key: "course-catalog", title: "دليل شروحات eStudy24 والربط" },
   { key: 'academic-programs', title: 'التخصصات والبرامج الأكاديمية' },
   { key: 'platform-settings', title: 'إعدادات المنصة' },
   { key: 'api-docs', title: 'وثائق API والتكاملات' },

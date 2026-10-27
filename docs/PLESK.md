@@ -1,5 +1,7 @@
 # Plesk production deployment — campus.estudy24.com
 
+For the eStudy24 course catalog, apply `202610270001_course_catalog` and follow [the Arabic course catalog deployment and six-hour Scheduled Tasks guide](COURSE-CATALOG.md). Existing hosting settings and environment remain unchanged. The scheduler needs the current database connection in its own protected environment; no WordPress credentials are required.
+
 For the academic directory release, apply `202610220001_academic_programs` using [ACADEMIC-PROGRAMS.md](ACADEMIC-PROGRAMS.md). No seed, environment change or hosting adjustment is required.
 
 For the Ambassador release, apply the additive migration and follow [AMBASSADORS.md](AMBASSADORS.md). Hosting settings, `server.js`, environment variables and n8n requests remain unchanged.

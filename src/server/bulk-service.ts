@@ -1,3 +1,4 @@
+import { remapCourses } from './course-catalog-service.ts';
 import type { PrismaClient } from '@prisma/client';
 import { Prisma } from '@prisma/client';
 import { createHash } from 'node:crypto';
@@ -10,9 +11,9 @@ import { HttpError } from './security.ts';
 type Tx = Prisma.TransactionClient;
 type Row = { id: string; universityId?: string | null; status?: string; visible?: boolean; active?: boolean; enabled?: boolean; role?: string; deletedAt?: Date | null; revokedAt?: Date | null; publishedAt?: Date | null; editedFields?: string[]; [key: string]: unknown };
 type Stamp = { id: string; revision: string };
-const tables: Record<string, string> = { articles: 'Article', 'academic-programs': 'AcademicProgram', platform_posts: 'PlatformPost', events: 'Event', programs: 'Program', links: 'ManagedLink', ads: 'Advertisement', universities: 'University', sources: 'IngestionSource', categories: 'ArticleCategory', administrators: 'Administrator', 'api-keys': 'UniversityApiKey' };
-const models: Record<string, string> = { articles: 'article', 'academic-programs': 'academicProgram', platform_posts: 'platformPost', events: 'event', programs: 'program', links: 'managedLink', ads: 'advertisement', universities: 'university', sources: 'ingestionSource', categories: 'articleCategory', administrators: 'administrator', 'api-keys': 'universityApiKey' };
-const selectFields: Record<string, string[]> = {
+const tables: Record<string, string> = { 'course-mappings': 'CourseUniversityMapping', articles: 'Article', 'academic-programs': 'AcademicProgram', platform_posts: 'PlatformPost', events: 'Event', programs: 'Program', links: 'ManagedLink', ads: 'Advertisement', universities: 'University', sources: 'IngestionSource', categories: 'ArticleCategory', administrators: 'Administrator', 'api-keys': 'UniversityApiKey' };
+const models: Record<string, string> = { 'course-mappings': 'courseUniversityMapping', articles: 'article', 'academic-programs': 'academicProgram', platform_posts: 'platformPost', events: 'event', programs: 'program', links: 'managedLink', ads: 'advertisement', universities: 'university', sources: 'ingestionSource', categories: 'articleCategory', administrators: 'administrator', 'api-keys': 'universityApiKey' };
+const selectFields: Record<string, string[]> = { 'course-mappings': ['categoryId', 'universityId', 'enabled', 'updatedAt'],
   articles: ['universityId', 'status', 'visible', 'deletedAt', 'updatedAt', 'publishedAt', 'publicationLocked'],
   'academic-programs': ['universityId', 'status', 'visible', 'deletedAt', 'updatedAt'],
   platform_posts: ['status', 'visible', 'deletedAt', 'updatedAt', 'publishedAt'],
@@ -81,7 +82,7 @@ function change(resource: string, action: BulkAction, now: Date): Record<string,
   if (action === 'hide') return { status: 'hidden', ...(resource === 'links' ? { active: false } : { visible: false }) };
   if (action === 'restore') return { deletedAt: null };
   if (action === 'delete' && ['articles', 'academic-programs', 'platform_posts'].includes(resource)) return { deletedAt: now };
-  if (action === 'enable' || action === 'disable') return { [['universities', 'sources'].includes(resource) ? 'enabled' : 'active']: action === 'enable' };
+  if (action === 'enable' || action === 'disable') return { [['universities', 'sources', 'course-mappings'].includes(resource) ? 'enabled' : 'active']: action === 'enable' };
   if (action === 'activate' || action === 'pause' || action === 'archive') return { status: { activate: 'active', pause: 'paused', archive: 'archived' }[action] };
   if (action === 'revoke') return { revokedAt: now };
   return {};
@@ -107,6 +108,7 @@ async function mutate(tx: Tx, actor: AdministratorAccess, resource: string, acti
   const changed = selected.filter(row => hardDelete || Object.entries(fields).some(([key, value]) => JSON.stringify(row[key]) !== JSON.stringify(value)) || action === 'publish' && (resource === 'articles' && row.status !== 'published' || resource === 'platform_posts' && !row.publishedAt)).length;
   const result = hardDelete ? await model(tx, resource).deleteMany({ where: { id: { in: ids } } }) : await model(tx, resource).updateMany({ where: { id: { in: ids } }, data: fields });
   if (result.count !== ids.length) stale();
+  if (resource === 'course-mappings') await remapCourses(tx);
   if (resource === 'administrators') {
     const revoked = action === 'disable' ? ids : selected.filter(row => !row.active).map(row => row.id);
     await tx.adminSession.deleteMany({ where: { administratorId: { in: revoked } } });
@@ -152,7 +154,7 @@ export async function bulkOperation(db: PrismaClient, resource: string, input: u
           const universityIds = [...new Set(current.map(row => row.universityId || (resource === 'universities' ? row.id : null)).filter((value): value is string => !!value))];
           const names = await tx.university.findMany({ where: { id: { in: universityIds } }, select: { name: true }, take: 4 });
           const universityName = university ? (await tx.university.findUnique({ where: { slug: university }, select: { name: true } }))?.name : actor.university?.name || (universityIds.length > 3 ? `${universityIds.length} جامعات` : names.map(row => row.name).join('، '));
-          return { token: confirmation.id, count: records.length, action: body.action, expires_at: confirmation.expiresAt, scope: universityName || (resource === 'platform_posts' ? 'محتوى eStudy24 العام' : 'السجلات المصرّح بها في هذا القسم'), confirmation: `${actionLabels[body.action]} ${records.length}`, security: ['administrators', 'api-keys', 'universities', 'sources'].includes(resource), irreversible: body.action === 'revoke' || body.action === 'delete' && !['articles', 'academic-programs', 'platform_posts'].includes(resource) };
+          return { token: confirmation.id, count: records.length, action: body.action, expires_at: confirmation.expiresAt, scope: universityName || (resource === 'platform_posts' ? 'محتوى eStudy24 العام' : 'السجلات المصرّح بها في هذا القسم'), confirmation: `${actionLabels[body.action]} ${records.length}`, security: ['administrators', 'api-keys', 'universities', 'sources', 'course-mappings'].includes(resource), irreversible: body.action === 'revoke' || body.action === 'delete' && !['articles', 'academic-programs', 'platform_posts'].includes(resource) };
         }
         await tx.$queryRaw`SELECT "id" FROM "AdminBulkConfirmation" WHERE "id" = ${body.token} FOR UPDATE`;
         const confirmation = await tx.adminBulkConfirmation.findUnique({ where: { id: body.token } });
@@ -163,6 +165,7 @@ export async function bulkOperation(db: PrismaClient, resource: string, input: u
         if (confirmation.completedAt) return confirmation.result;
         if (confirmation.expiresAt <= new Date()) throw new HttpError(409, 'CONFIRMATION_EXPIRED', 'انتهت مهلة التأكيد. أعد مراجعة التحديد.');
         const records = confirmation.records as unknown as Stamp[], ids = records.map(r => r.id).sort();
+        if (resource === 'course-mappings') await tx.$executeRaw`SELECT pg_advisory_xact_lock(270001)`;
         if (resource === 'api-keys') { const slug = (s.filters as Record<string, string>).university; await tx.$queryRaw`SELECT "id" FROM "University" WHERE "slug" = ${slug} FOR UPDATE`; }
         await tx.$queryRaw(Prisma.sql`SELECT "id" FROM ${Prisma.raw('"' + tables[resource] + '"')} WHERE "id" IN (${Prisma.join(ids)}) ORDER BY "id" FOR UPDATE`);
         const current = await check(tx, actor, resource, s.filters, records); await eligible(tx, actor, resource, action, current);
