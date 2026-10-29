@@ -20,6 +20,11 @@ enum OriginType {
   imported
 }
 
+enum InstitutionType {
+  UNIVERSITY
+  COLLEGE
+}
+
 enum AdminRole {
   owner
   editor
@@ -71,6 +76,8 @@ model University {
   websiteUrl  String?
   logoUrl     String?
   enabled     Boolean  @default(true)
+  showInDirectory Boolean @default(true)
+  institutionType InstitutionType @default(UNIVERSITY)
   autoPublishNews Boolean @default(false)
   telegramCommunityUrl String?
   createdAt   DateTime @default(now())
@@ -87,6 +94,7 @@ model University {
   apiKeys     UniversityApiKey[]
   courseMappings CourseUniversityMapping[]
   courseExplanations CourseExplanation[]
+  @@index([enabled, showInDirectory, institutionType], map: "University_directory_idx")
 }
 
 // Source-managed eStudy24 explanations, unrelated to academic degrees or ingestion tombstones.

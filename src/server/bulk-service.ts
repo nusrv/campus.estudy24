@@ -18,7 +18,7 @@ const selectFields: Record<string, string[]> = { 'course-mappings': ['categoryId
   'academic-programs': ['universityId', 'status', 'visible', 'deletedAt', 'updatedAt'],
   platform_posts: ['status', 'visible', 'deletedAt', 'updatedAt', 'publishedAt'],
   events: ['universityId', 'status', 'visible', 'updatedAt'], programs: ['universityId', 'status', 'visible', 'updatedAt'], links: ['universityId', 'status', 'active', 'updatedAt'],
-  ads: ['status', 'updatedAt'], universities: ['enabled', 'updatedAt'], sources: ['key', 'name', 'url', 'universityId', 'enabled', 'autoPublishAcademicPrograms'], categories: ['name', 'slug'],
+  ads: ['status', 'updatedAt'], universities: ['enabled', 'showInDirectory', 'updatedAt'], sources: ['key', 'name', 'url', 'universityId', 'enabled', 'autoPublishAcademicPrograms'], categories: ['name', 'slug'],
   administrators: ['email', 'name', 'role', 'active', 'universityId', 'updatedAt'], 'api-keys': ['universityId', 'createdAt', 'revokedAt'],
 };
 // A small typed adapter keeps generic selection infrastructure independent of resource payloads.
@@ -77,6 +77,7 @@ async function eligible(tx: Tx, actor: AdministratorAccess, resource: string, ac
   }
 }
 function change(resource: string, action: BulkAction, now: Date): Record<string, unknown> {
+  if (action === 'directory_show' || action === 'directory_hide') return { showInDirectory: action === 'directory_show' };
   if (action === 'publish') return { status: 'published', ...(resource === 'links' ? { active: true } : { visible: true }) };
   if (action === 'unpublish') return { status: 'unpublished' };
   if (action === 'hide') return { status: 'hidden', ...(resource === 'links' ? { active: false } : { visible: false }) };

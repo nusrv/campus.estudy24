@@ -1,5 +1,6 @@
 import { NEWS_CATEGORIES, orderNewsCategories } from "../lib/news-categories";
 import "server-only";
+import { directoryVisibility, institutionTypes } from "../lib/institutions";
 import { Prisma } from "@prisma/client";
 import { db } from "./db";
 import { dateRange } from "../lib/portal";
@@ -16,6 +17,7 @@ export function searchFromQuery(query: PublicQuery) {
   search.set("page", Number.isInteger(page) && page > 0 && page <= 100000 ? String(page) : "1");
   search.set("page_size", "12");
   if (value("search").trim()) search.set("search", value("search").trim().slice(0, 200));
+  if ((institutionTypes as readonly string[]).includes(value("institution_type"))) search.set("institution_type", value("institution_type"));
   if (value("region")) search.set("region", value("region").slice(0, 100));
   if (slugSchema.safeParse(value("category")).success) search.set("category", value("category"));
   if (platformType.safeParse(value("type")).success) search.set("type", value("type"));
@@ -31,13 +33,14 @@ export async function homepageContent() {
   ]);
   return { featured, news, learning };
 }
-export const universityPublicSelect = { id: true, name: true, slug: true, description: true, logoUrl: true, websiteUrl: true, telegramCommunityUrl: true, city: true, region: true } satisfies Prisma.UniversitySelect;
+export const universityPublicSelect = { institutionType: true, id: true, name: true, slug: true, description: true, logoUrl: true, websiteUrl: true, telegramCommunityUrl: true, city: true, region: true } satisfies Prisma.UniversitySelect;
 export async function directoryPage(search: URLSearchParams) {
   const query = search.get("search");
   const region = search.get("region");
   const page = Number(search.get("page") || 1);
-  const where: Prisma.UniversityWhereInput = { enabled: true, ...(region && { region }), ...(query && { OR: [{ name: { contains: query, mode: "insensitive" } }, { city: { contains: query, mode: "insensitive" } }] }) };
-  const [items, total, regions] = await Promise.all([db.university.findMany({ where, select: universityPublicSelect, skip: (page - 1) * 12, take: 12, orderBy: [{ name: "asc" }, { id: "asc" }] }), db.university.count({ where }), db.university.findMany({ where: { enabled: true }, distinct: ["region"], select: { region: true }, orderBy: { region: "asc" } })]);
+  const institutionType = institutionTypes.find(type => type === search.get("institution_type"));
+  const where: Prisma.UniversityWhereInput = { ...directoryVisibility, ...(institutionType && { institutionType }), ...(region && { region }), ...(query && { OR: [{ name: { contains: query, mode: "insensitive" } }, { city: { contains: query, mode: "insensitive" } }] }) };
+  const [items, total, regions] = await Promise.all([db.university.findMany({ where, select: universityPublicSelect, skip: (page - 1) * 12, take: 12, orderBy: [{ name: "asc" }, { id: "asc" }] }), db.university.count({ where }), db.university.findMany({ where: directoryVisibility, distinct: ["region"], select: { region: true }, orderBy: { region: "asc" } })]);
   return { items, total, regions: regions.map(r => r.region), page, pages: Math.ceil(total / 12) };
 }
 export const universityTabs = [

@@ -1,5 +1,6 @@
 import type { PrismaClient, Prisma } from '@prisma/client';
 import { randomUUID, createHash } from 'node:crypto';
+import { directoryVisibility } from '../lib/institutions.ts';
 import { resolveCourseUniversity, VERIFIED_COURSE_MAPPINGS, catalogSearch, COURSE_SEARCH_LIMIT } from '../lib/course-catalog.ts';
 import { fetchCatalogInventory, CatalogSourceError, type CatalogInventory } from './course-source.ts';
 import { administratorAccess } from './administrator-access.ts';
@@ -113,6 +114,6 @@ export async function publicCourseCatalog(db: PrismaClient, search: URLSearchPar
   const university = search.get('university') || '', term = search.get('search') || '', page = Number(search.get('page') || 1), size = Number(search.get('page_size') || 12);
   if (term.length > COURSE_SEARCH_LIMIT || university && !/^[a-z0-9-]{1,100}$/.test(university) || !Number.isInteger(page) || page < 1 || page > 100000 || !Number.isInteger(size) || size < 1 || size > 100) throw new HttpError(422, 'INVALID_FILTER', 'أدخل معايير بحث وأرقام صفحات صحيحة.');
   const where: Prisma.CourseExplanationWhereInput = { sourcePublished: true, mappingState: 'mapped', university: { enabled: true, ...(university && { slug: university }) }, ...(term.trim() && { searchText: { contains: catalogSearch(term), mode: 'insensitive' } }) };
-  const [items, total, universities] = await Promise.all([db.courseExplanation.findMany({ where, select: { id: true, title: true, description: true, destinationUrl: true, imageUrl: true, university: { select: { name: true, slug: true } } }, orderBy: [{ title: 'asc' }, { id: 'asc' }], skip: (page-1)*size, take: size }), db.courseExplanation.count({ where }), db.university.findMany({ where: { enabled: true, courseExplanations: { some: { sourcePublished: true, mappingState: 'mapped' } } }, select: { name: true, slug: true, logoUrl: true }, orderBy: { name: 'asc' } })]);
+  const [items, total, universities] = await Promise.all([db.courseExplanation.findMany({ where, select: { id: true, title: true, description: true, destinationUrl: true, imageUrl: true, university: { select: { name: true, slug: true } } }, orderBy: [{ title: 'asc' }, { id: 'asc' }], skip: (page-1)*size, take: size }), db.courseExplanation.count({ where }), db.university.findMany({ where: { ...directoryVisibility, courseExplanations: { some: { sourcePublished: true, mappingState: 'mapped' } } }, select: { name: true, slug: true, logoUrl: true }, orderBy: { name: 'asc' } })]);
   return { items, total, universities, page, pages: Math.ceil(total / size), page_size: size };
 }

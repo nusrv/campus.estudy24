@@ -1,4 +1,5 @@
 import "server-only";
+import { directoryVisibility } from "../lib/institutions";
 import { Prisma } from "@prisma/client";
 import { db } from "./db";
 import { HttpError } from "./security";
@@ -18,8 +19,8 @@ export async function publicList(resource: string, search: URLSearchParams) {
   let items: unknown[];
   let total: number;
   if (resource === "universities") {
-    const where: Prisma.UniversityWhereInput = { enabled: true, ...(p.university && { slug: p.university }), ...(p.region && { region: p.region }), ...(p.search && { OR: [{ name: { contains: p.search, mode: "insensitive" } }, { city: { contains: p.search, mode: "insensitive" } }] }) };
-    [items, total] = await Promise.all([db.university.findMany({ where, ...args, orderBy: { name: "asc" }, select: { id: true, name: true, slug: true, description: true, city: true, region: true, logoUrl: true, websiteUrl: true, telegramCommunityUrl: true } }), db.university.count({ where })]);
+    const where: Prisma.UniversityWhereInput = { ...directoryVisibility, ...(p.institution_type && { institutionType: p.institution_type }), ...(p.university && { slug: p.university }), ...(p.region && { region: p.region }), ...(p.search && { OR: [{ name: { contains: p.search, mode: "insensitive" } }, { city: { contains: p.search, mode: "insensitive" } }] }) };
+    [items, total] = await Promise.all([db.university.findMany({ where, ...args, orderBy: { name: "asc" }, select: { id: true, name: true, slug: true, institutionType: true, description: true, city: true, region: true, logoUrl: true, websiteUrl: true, telegramCommunityUrl: true } }), db.university.count({ where })]);
   } else if (resource === "news") {
     if (p.scope === "homepage") throw new HttpError(422, "INVALID_SCOPE", "University news is not homepage content. Use /api/content.");
     const where: Prisma.ArticleWhereInput = { ...publishedArticleWhere, ...(p.university && { university: { enabled: true, slug: p.university } }), ...(p.category && { category: { slug: p.category } }), ...(p.search && { title: { contains: p.search, mode: "insensitive" } }), ...((p.from || p.to) && { publishedAt: { ...(p.from && { gte: new Date(p.from) }), ...(p.to && { lte: new Date(p.to) }) } }) };

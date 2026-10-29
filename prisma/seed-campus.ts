@@ -8,9 +8,8 @@ export async function seedCampus(db: PrismaClient) {
     await tx.advertisementPlacement.upsert({ where: { id: 'university_banner' }, update: {}, create: { id: 'university_banner', name: 'بانر الجامعة' } });
     await seedNewsCategories(tx);
     for (const data of SAUDI_UNIVERSITIES) {
-      const university = await tx.university.upsert({ where: { slug: data.slug }, create: { ...data, enabled: true }, update: { enabled: true } });
-      // Keep editorial identity, logos and descriptions; fill only missing official URLs.
-      await tx.university.updateMany({ where: { id: university.id, OR: [{ websiteUrl: null }, { websiteUrl: '' }] }, data: { websiteUrl: data.websiteUrl } });
+      const university = await tx.university.upsert({ where: { slug: data.slug }, create: { ...data, enabled: true }, update: {} });
+      // Existing institution fields, including deliberately cleared URLs, are Owner-managed.
       await tx.ingestionSource.upsert({ where: { key: `${data.slug}-rss` }, update: {}, create: { key: `${data.slug}-rss`, name: `تكامل n8n — ${data.name}`, url: data.slug === 'uqu' ? 'https://uqu.edu.sa/App/Rss' : data.websiteUrl, universityId: university.id } });
       await tx.advertisement.upsert({ where: { id: demoAdId(data.slug) }, update: {}, create: {
         id: demoAdId(data.slug), title: `إعلان تجريبي — eStudy24 مع مجتمع ${data.name}`,

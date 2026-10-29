@@ -48,10 +48,13 @@ test('PostgreSQL + HTTP: seed, advertisements, counter, private API docs and sco
       assert.equal(ads.length, 10);
       for (const university of universities) { const ad = ads.find(ad => ad.id === demoAdId(university.slug))!; assert.equal(ad.status, 'active'); assert.equal(ad.global, false); assert.deepEqual(ad.universities.map(u => u.universityId), [university.id]); assert.equal(ad.placementAssignments[0].placementId, 'university_banner'); assert.match(ad.title, /إعلان تجريبي/); }
       const uqu = universities.find(u => u.slug === 'uqu')!;
-      await db.university.update({ where: { id: uqu.id }, data: { description: 'تحرير محفوظ', enabled: false } });
+      await db.university.update({ where: { id: uqu.id }, data: { description: 'تحرير محفوظ', enabled: false, showInDirectory: false } });
       await db.advertisement.update({ where: { id: demoAdId('uqu') }, data: { title: 'إعلان تجريبي — تحرير محفوظ', status: 'paused' } });
       await seedCampus(db);
-      assert.equal((await db.university.findUniqueOrThrow({ where: { id: uqu.id } })).description, 'تحرير محفوظ');
+      const preservedUniversity = await db.university.findUniqueOrThrow({ where: { id: uqu.id } });
+      assert.equal(preservedUniversity.description, 'تحرير محفوظ'); assert.equal(preservedUniversity.enabled, false); assert.equal(preservedUniversity.showInDirectory, false);
+      // Explicit fixture transition for subsequent public-page checks; seeds must never reactivate it.
+      await db.university.update({ where: { id: uqu.id }, data: { enabled: true, showInDirectory: true } });
       const preservedAd = await db.advertisement.findUniqueOrThrow({ where: { id: demoAdId('uqu') } });
       assert.equal(preservedAd.title, 'إعلان تجريبي — تحرير محفوظ'); assert.equal(preservedAd.status, 'paused');
       await db.advertisement.update({ where: { id: demoAdId('uqu') }, data: { status: 'active' } });

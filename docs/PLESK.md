@@ -1,5 +1,7 @@
 # Plesk production deployment — campus.estudy24.com
 
+For the institution-directory release, apply the additive **`202610290001_institution_directory`** migration using [the staged Owner-controlled rollout](INSTITUTION-DIRECTORY.md). Minimum sequence in the existing Node.js 22 application root: `npm ci --include=dev`, `npm run db:migrate`, `npm run build`, then **Restart App**. No seed, new environment variable, hosting setting or scheduler change. Deployment creates no institutions/mappings and hides none: the Owner must inspect inactive records and dependency counts, approve identities/slugs and mapping decisions, then explicitly reconcile through the private dashboard. Directory visibility is independent from operational `enabled`; never disable institutions to hide directory cards. The guide includes visibility rollback without a database restore.
+
 For the eStudy24 course catalog, apply `202610270001_course_catalog` and follow [the Arabic course catalog deployment and six-hour Scheduled Tasks guide](COURSE-CATALOG.md). Existing hosting settings and environment remain unchanged. The scheduler needs the current database connection in its own protected environment; no WordPress credentials are required.
 
 For the academic directory release, apply `202610220001_academic_programs` using [ACADEMIC-PROGRAMS.md](ACADEMIC-PROGRAMS.md). No seed, environment change or hosting adjustment is required.
