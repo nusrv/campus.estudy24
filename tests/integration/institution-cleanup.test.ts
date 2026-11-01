@@ -18,8 +18,22 @@ const url = process.env.TEST_DATABASE_URL;
 test('Owner-controlled permanent cleanup: graph, conflicts, rollback, shared data and one-time completion', { skip: !url, timeout: 900000 }, async t => {
   assert.equal(new URL(url!).hostname, '127.0.0.1'); assert.match(new URL(url!).pathname, /_test$/);
   const migration = spawnSync(process.execPath, ['node_modules/prisma/build/index.js', 'migrate', 'deploy'], { env: { ...process.env, DATABASE_URL: url }, encoding: 'utf8' }); assert.equal(migration.status, 0, migration.stderr);
-  const { createDatabase } = await import('../../src/server/database-client.ts'); const db = createDatabase(url); t.after(() => db.$disconnect());
+  const { createDatabase } = await import('../../src/server/database-client.ts'); const db = createDatabase(url);
   assert.equal(await db.university.count(), 0, 'Fresh isolated database required');
+  assert.equal(await db.administrator.count(), 0, 'No pre-existing accounts may be present');
+  t.after(async () => {
+    // This suite owns the fresh loopback database's institution/account fixtures.
+    // Leave it reusable by the next suite in npm run test:integration.
+    try {
+      await db.adminBulkSelection.deleteMany(); await db.articleEdit.deleteMany(); await db.ingestionLog.deleteMany();
+      await db.contentSync.deleteMany(); await db.article.deleteMany(); await db.academicProgram.deleteMany();
+      await db.event.deleteMany(); await db.program.deleteMany(); await db.managedLink.deleteMany();
+      await db.courseExplanation.deleteMany(); await db.courseUniversityMapping.deleteMany();
+      await db.auditLog.deleteMany(); await db.administrator.deleteMany(); await db.universityApiKey.deleteMany();
+      await db.ingestionSource.deleteMany(); await db.advertisement.deleteMany(); await db.uploadedMedia.deleteMany();
+      await db.mediaDeletionJob.deleteMany(); await db.university.deleteMany();
+    } finally { await db.$disconnect(); }
+  });
   await seedCampus(db); await seedCourseMappings(db);
   const hash = await hashPassword(randomBytes(24).toString('base64url'));
   const owner = await db.administrator.create({ data: { email: 'cleanup-owner@test.invalid', name: 'مدير اختبار', passwordHash: hash, role: 'owner' } });

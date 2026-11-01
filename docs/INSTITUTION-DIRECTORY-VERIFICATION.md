@@ -47,6 +47,7 @@ Existing suites also cover the content and Ambassador isolation, ingestion/dedup
 | Final institution cleanup/HTTP/browser | 8 passed |
 | University seeds/ads/counter/scoped keys | 11 passed |
 | Integration/browser aggregate | 95 passed across isolated suites; no skipped suites |
+| Shared-database sequential cleanup → university suites | 19 passed, 0 failed/skipped; cleanup fixtures and completion marker removed between suites |
 | `npm run typecheck` | Passed after build |
 | `npm run lint` | Passed |
 | `npm run db:validate` | Passed |
@@ -55,6 +56,8 @@ Existing suites also cover the content and Ambassador isolation, ingestion/dedup
 | `npm run verify:production` | Passed: 11 CSS/JS/preload assets, 24 Arabic-font requests, 5 private-file denials; no copying |
 
 The first regression pass saw an unexpected HTML response during an academic-ingestion development-server request; the settled-code rerun passed all 9 without ingestion changes. Initial new browser assertions incorrectly counted only expanded accordion links and assumed a hard 404 after a streamed not-found response; those assertions were corrected to test authorized DOM entries and actual not-found UI plus noindex. The complete final cleanup suite then passed. The academic, cleanup and bulk suites were rerun sequentially after the final UI adjustments; the aggregate is per-suite results, not a claim of one uninterrupted all-green invocation.
+
+A final test-isolation correction adds fixture teardown to the new cleanup suite, matching the existing sequential integration runner. Both the cleanup and following university suite then passed together against one fresh loopback test database (19 checks). This also verifies that the one-time production completion marker from the cleanup fixture cannot influence the next suite's seed expectations. TypeScript and ESLint passed again after this test-only correction; application code and the previously verified production build are unchanged.
 
 Desktop/mobile browser checks covered **1440, 390 and 320px**, all three roles, automatic group expansion, collapse-all, keyboard toggling, mobile drawer Escape, logout visibility, no page overflow, ordinary management pages and the actual one-confirmation cleanup HTTP operation. Screenshots were visually reviewed locally; they contain only isolated fixtures and are not committed.
 
