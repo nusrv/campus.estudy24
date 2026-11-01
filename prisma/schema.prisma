@@ -562,6 +562,12 @@ model UploadedMedia {
   @@index([universityId])
 }
 
+// Transactional outbox: bytes are removed only after metadata deletion commits.
+model MediaDeletionJob {
+  filename String @id
+  createdAt DateTime @default(now())
+}
+
 // Degrees/majors directory, deliberately separate from time-bound training Program records.
 model AcademicProgram {
   id String @id @default(cuid())

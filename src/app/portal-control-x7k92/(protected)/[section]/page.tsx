@@ -1,11 +1,10 @@
 import { administratorAccess, contentPermission, ambassadorResources } from "@/server/administrator-access";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { requireAdminPage } from "@/server/auth";
 import { adminList, RESOURCES, resourceName } from "@/server/admin-data";
 import { db } from "@/server/db";
 import { adminSections } from "@/components/admin/config";
 import { ResourceManager } from "@/components/admin/resource-manager";
-import { VisitorSettings } from "@/components/admin/visitor-settings";
 import { authorizeRole } from "@/server/security";
 import { Administrators } from "@/components/admin/administrators";
 import { administratorManagementList } from "@/server/management-query";
@@ -23,11 +22,11 @@ export default async function ResourcePage({ params, searchParams }: { params: P
   }
   if (section === "settings") {
     authorizeRole(auth.administrator.role, ["owner"]);
-    const [settings, aggregate] = await Promise.all([db.siteSettings.findUnique({ where: { id: "main" }, select: { visitorStartingValue: true } }), db.visitorDaily.aggregate({ _sum: { visits: true } })]);
-    return <VisitorSettings initial={settings || { visitorStartingValue: 0 }} tracked={aggregate._sum.visits || 0} />;
+    redirect('/portal-control-x7k92/platform-settings');
   }
   if (!(RESOURCES as readonly string[]).includes(section)) notFound();
   contentPermission(actor, section);
   const [data, universities, categories] = await Promise.all([adminList(resourceName(section), new URLSearchParams(filters), auth.administratorId, auth.id), db.university.findMany({ where: actor.role === "ambassador" ? { id: actor.universityId! } : {}, take: 1000, select: { id: true, name: true, slug: true }, orderBy: { name: "asc" } }), db.articleCategory.findMany({ take: 1000, select: { id: true, name: true, slug: true }, orderBy: { name: "asc" } })]);
-  return <ResourceManager key={`${section}:${JSON.stringify(filters)}`} resource={section} title={adminSections.find(s => s.key === section)?.title || "الإدارة"} data={JSON.parse(JSON.stringify(data))} lookups={{ universities, categories }} filters={filters} />;
+  const cleanupCompleted = section === 'universities' && auth.administrator.role === 'owner' ? !!await db.auditLog.findFirst({ where: { action: 'approved_institution_cleanup_v1' }, select: { id: true } }) : false;
+  return <ResourceManager key={`${section}:${JSON.stringify(filters)}`} resource={section} title={adminSections.find(s => s.key === section)?.title || "الإدارة"} data={JSON.parse(JSON.stringify({ ...data, cleanupCompleted }))} lookups={{ universities, categories }} filters={filters} />;
 }

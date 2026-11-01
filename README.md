@@ -1,6 +1,8 @@
 # eStudy24 Campus
 
-Institution directory reconciliation: [Owner preflight, separate directory visibility, safe reconciliation and Plesk rollout](docs/INSTITUTION-DIRECTORY.md), [verification](docs/INSTITUTION-DIRECTORY-VERIFICATION.md).
+Administration: [compact accordion navigation and daily workflows](docs/ADMIN-DASHBOARD.md).
+
+Final institution cleanup: [Owner-confirmed permanent cleanup and Plesk rollout](docs/INSTITUTION-DIRECTORY.md), [verification](docs/INSTITUTION-DIRECTORY-VERIFICATION.md).
 
 Public eStudy24 course catalog: [Arabic setup, mapping, synchronization and Plesk schedule](docs/COURSE-CATALOG.md), [verification](docs/COURSE-CATALOG-VERIFICATION.md).
 

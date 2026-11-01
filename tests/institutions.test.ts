@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { directoryVisibility, possibleInstitution, reconciliationInstitutions, institutionLabel } from '../src/lib/institutions.ts';
 import { universitySchema } from '../src/server/validation.ts';
 import { bulkActions } from '../src/lib/bulk.ts';
-import { reconciliationRequest } from '../src/server/institution-reconciliation.ts';
+import { institutionCleanupRequest } from '../src/server/institution-cleanup.ts';
 test('discovery policy and college vocabulary never imply operational disable', () => {
   assert.deepEqual(directoryVisibility, { enabled: true, showInDirectory: true });
   assert.equal(institutionLabel('COLLEGE'), 'كلية'); assert.equal(institutionLabel('UNIVERSITY'), 'جامعة');
@@ -25,8 +25,7 @@ test('directory bulk actions are distinct Owner-only actions; approvals reject t
   assert.ok(bulkActions('universities', 'owner').includes('directory_hide'));
   assert.deepEqual(bulkActions('universities', 'editor'), []); assert.deepEqual(bulkActions('universities', 'ambassador'), []);
   assert.equal(bulkActions('articles', 'owner').includes('directory_hide'), false);
-  const payload = { action: 'reconcile', snapshot: 'a'.repeat(64), confirmation: 'تأكيد تسوية دليل المؤسسات', choices: reconciliationInstitutions.map(i => ({ action: 'create', categoryId: i.categoryId, slug: `institution-${i.categoryId}`, verifiedIdentity: true, approveMapping: true })) };
-  assert.ok(reconciliationRequest.safeParse(payload).success);
-  assert.equal(reconciliationRequest.safeParse({ ...payload, enabled: false }).success, false);
-  assert.equal(reconciliationRequest.safeParse({ ...payload, choices: payload.choices.map(c => ({ ...c, verifiedIdentity: false })) }).success, false);
+  const payload = { snapshot: 'a'.repeat(64), confirmed: true };
+  assert.ok(institutionCleanupRequest.safeParse(payload).success);
+  for (const invalid of [{ ...payload, universityIds: ['forged'] }, { ...payload, confirmed: false }, { confirmed: true }]) assert.equal(institutionCleanupRequest.safeParse(invalid).success, false);
 });

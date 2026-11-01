@@ -1,6 +1,6 @@
 # eStudy24 Campus — phase three
 
-Current institution directory: [Owner preflight and reconciliation](INSTITUTION-DIRECTORY.md). `/universities` now covers universities and colleges, with independent `showInDirectory` discovery and `enabled` operational states. Hidden-but-enabled institutions keep direct routes, integrations, Ambassador access and sitemap indexing. The migration alone does not create institutions or hide existing records.
+Current institution directory: [final Owner-confirmed cleanup](INSTITUTION-DIRECTORY.md), [compact administration](ADMIN-DASHBOARD.md). The final approved directory has nine universities and كلية ينبع الصناعية. ksu/kku/taibah are permanently deleted only by an explicit Owner operation after deployment; earlier hide-only instructions are superseded. Visibility and operational status remain independent for retained institutions.
 
 The university/key/counter release supersedes the older visitor-baseline setup below. Use [INTEGRATIONS.md](INTEGRATIONS.md) for current migration, seed, counter and n8n instructions.
 

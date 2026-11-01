@@ -7,7 +7,9 @@ export async function seedCampus(db: PrismaClient) {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(214721, 793)`;
     await tx.advertisementPlacement.upsert({ where: { id: 'university_banner' }, update: {}, create: { id: 'university_banner', name: 'بانر الجامعة' } });
     await seedNewsCategories(tx);
-    for (const data of SAUDI_UNIVERSITIES) {
+    const completed = await tx.auditLog.findFirst({ where: { action: "approved_institution_cleanup_v1" }, select: { id: true } });
+    const universities = SAUDI_UNIVERSITIES.filter(u => !completed || !["ksu", "kku", "taibah"].includes(u.slug));
+    for (const data of universities) {
       const university = await tx.university.upsert({ where: { slug: data.slug }, create: { ...data, enabled: true }, update: {} });
       // Existing institution fields, including deliberately cleared URLs, are Owner-managed.
       await tx.ingestionSource.upsert({ where: { key: `${data.slug}-rss` }, update: {}, create: { key: `${data.slug}-rss`, name: `تكامل n8n — ${data.name}`, url: data.slug === 'uqu' ? 'https://uqu.edu.sa/App/Rss' : data.websiteUrl, universityId: university.id } });
@@ -20,6 +22,6 @@ export async function seedCampus(db: PrismaClient) {
         universities: { create: { universityId: university.id } },
       } });
     }
-    return { universities: SAUDI_UNIVERSITIES.length, demoAdvertisements: SAUDI_UNIVERSITIES.length };
+    return { universities: universities.length, demoAdvertisements: universities.length };
   }, { timeout: 30000 });
 }
