@@ -1,6 +1,6 @@
 # eStudy24 Campus — phase three
 
-Current institution directory: [final Owner-confirmed cleanup](INSTITUTION-DIRECTORY.md), [compact administration](ADMIN-DASHBOARD.md). The final approved directory has nine universities and كلية ينبع الصناعية. ksu/kku/taibah are permanently deleted only by an explicit Owner operation after deployment; earlier hide-only instructions are superseded. Visibility and operational status remain independent for retained institutions.
+Current institution directory: [one-command Plesk cleanup (`institutions:finalize`)](INSTITUTION-DIRECTORY.md), [compact administration](ADMIN-DASHBOARD.md). The final approved directory has nine universities and كلية ينبع الصناعية. ksu/kku/taibah are permanently deleted only by explicit authorized execution after deployment; no Campus dashboard login is required. Earlier hide-only instructions are superseded. Visibility and operational status remain independent for retained institutions.
 
 The university/key/counter release supersedes the older visitor-baseline setup below. Use [INTEGRATIONS.md](INTEGRATIONS.md) for current migration, seed, counter and n8n instructions.
 

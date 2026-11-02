@@ -236,8 +236,8 @@ test('PostgreSQL + HTTP + browser: publication policies, structured ingestion, T
           const [name, value] = auth.cookie.split('='); await context.addCookies([{ name, value, url: origin + ADMIN_PATH }]);
           const page = await context.newPage(), url = `${origin}${ADMIN_PATH}/articles?search=${marker}&page_size=2`;
           await page.goto(url); const all = page.getByRole('checkbox', { name: 'تحديد جميع سجلات الصفحة الحالية', exact: true }), rows = page.getByRole('checkbox', { name: /^تحديد السجل:/ });
-          assert.equal(await rows.count(), 2); await page.getByRole('combobox', { name: 'الإجراء الجماعي' }).selectOption('delete');
-          await all.check(); assert.equal(await page.getByRole('button', { name: 'حذف المحدد (2)', exact: true }).count(), 1);
+          assert.equal(await rows.count(), 2); assert.equal(await page.getByRole('combobox', { name: 'الإجراء الجماعي' }).count(), 0);
+          await all.check(); await page.getByRole('combobox', { name: 'الإجراء الجماعي' }).selectOption('delete'); assert.equal(await page.getByRole('button', { name: 'حذف المحدد (2)', exact: true }).count(), 1);
           await page.getByRole('button', { name: 'التالي', exact: true }).click(); await page.waitForURL('**page=2'); assert.equal(await rows.count(), 1); assert.equal(await rows.first().isChecked(), false);
           await page.goto(url); await page.getByRole('button', { name: 'مسح التحديد', exact: true }).click(); await rows.first().check(); assert.equal(await all.evaluate(el => (el as HTMLInputElement).indeterminate), true); await rows.first().uncheck(); assert.equal(await all.isChecked(), false);
           await all.check(); await all.uncheck(); assert.equal(await page.locator('input[type="checkbox"]:checked').count(), 0); await all.check();

@@ -61,14 +61,22 @@ export async function seedCourseMappings(db: PrismaClient) {
   }, { timeout: 60000 });
 }
 export async function syncCourseCatalog(db: PrismaClient, options: { actor?: CatalogActor; inventory?: () => Promise<CatalogInventory>; approval?: { runId: string; confirmation: string } } = {}) {
+  return runCatalogSync(db, options, false);
+}
+// An explicit local maintenance run does not enable/disable the scheduler.
+// Source validation, lease, atomic replacement and removal guards remain shared.
+export async function syncCourseCatalogForMaintenance(db: PrismaClient, options: { inventory?: () => Promise<CatalogInventory> } = {}) {
+  return runCatalogSync(db, options, true);
+}
+async function runCatalogSync(db: PrismaClient, options: { actor?: CatalogActor; inventory?: () => Promise<CatalogInventory>; approval?: { runId: string; confirmation: string } }, maintenance: boolean) {
   const token = randomUUID(), now = new Date();
   const run = await db.$transaction(async tx => {
     if (options.actor) await catalogOwner(tx, options.actor, true);
     const settings = await tx.courseCatalogSettings.upsert({ where: { id: 'main' }, create: { id: 'main' }, update: {} });
-    if (!settings.enabled) throw new HttpError(409, 'CATALOG_DISABLED', 'فعّل المزامنة أولًا من إعدادات دليل الشروحات.');
+    if (!settings.enabled && !maintenance) throw new HttpError(409, 'CATALOG_DISABLED', 'فعّل المزامنة أولًا من إعدادات دليل الشروحات.');
     if (!(await tx.courseCatalogSettings.updateMany({ where: { id: 'main', OR: [{ leaseUntil: null }, { leaseUntil: { lt: now } }] }, data: { leaseToken: token, leaseUntil: new Date(Date.now() + 15 * 60000) } })).count) throw new HttpError(409, 'SYNC_RUNNING', 'توجد مزامنة قيد التنفيذ. انتظر انتهاءها.');
     await tx.courseSyncRun.updateMany({ where: { status: 'running', startedAt: { lt: new Date(Date.now() - 15 * 60000) } }, data: { status: 'failed', errorCode: 'INTERRUPTED', finishedAt: now } });
-    return tx.courseSyncRun.create({ data: { trigger: options.actor ? 'owner' : 'scheduled' } });
+    return tx.courseSyncRun.create({ data: { trigger: maintenance ? 'maintenance' : options.actor ? 'owner' : 'scheduled' } });
   });
   let fetchedCount = 0, removedCount = 0, inventoryDigest: string | null = null;
   try {
@@ -79,7 +87,7 @@ export async function syncCourseCatalog(db: PrismaClient, options: { actor?: Cat
       if (options.actor) await catalogOwner(tx, options.actor, true);
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(270001)`;
       const settings = await tx.courseCatalogSettings.findUniqueOrThrow({ where: { id: 'main' } });
-      if (!settings.enabled || settings.leaseToken !== token || !settings.leaseUntil || settings.leaseUntil <= new Date()) throw new CatalogSourceError('SYNC_CANCELLED');
+      if ((!settings.enabled && !maintenance) || settings.leaseToken !== token || !settings.leaseUntil || settings.leaseUntil <= new Date()) throw new CatalogSourceError('SYNC_CANCELLED');
       const sourceIds = data.courses.map(c => c.wordpressId);
       if (new Set(sourceIds).size !== sourceIds.length) throw new CatalogSourceError('SOURCE_DUPLICATES');
       const [previous, removed] = await Promise.all([tx.courseExplanation.count({ where: { sourcePublished: true } }), tx.courseExplanation.count({ where: { sourcePublished: true, wordpressId: { notIn: sourceIds } } })]);

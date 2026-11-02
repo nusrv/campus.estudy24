@@ -16,7 +16,7 @@ export const cleanupTargets = [
   { slug: 'taibah', name: 'جامعة طيبة' },
 ] as const;
 const newSlugs: Record<number, string> = { 287: 'baha', 159: 'tabuk', 310: 'yic' };
-const retainedNames: Record<string, string> = { pnu: 'جامعة الأميرة نورة بنت عبدالرحمن', imamu: 'جامعة الإمام محمد بن سعود الإسلامية', iau: 'جامعة الإمام عبدالرحمن بن فيصل', qu: 'جامعة القصيم', kau: 'جامعة الملك عبدالعزيز', uqu: 'جامعة أم القرى', jazanu: 'جامعة جازان' };
+export const retainedNames: Record<string, string> = { pnu: 'جامعة الأميرة نورة بنت عبدالرحمن', imamu: 'جامعة الإمام محمد بن سعود الإسلامية', iau: 'جامعة الإمام عبدالرحمن بن فيصل', qu: 'جامعة القصيم', kau: 'جامعة الملك عبدالعزيز', uqu: 'جامعة أم القرى', jazanu: 'جامعة جازان' };
 export const institutionCleanupRequest = z.object({ snapshot: z.string().regex(/^[a-f0-9]{64}$/), confirmed: z.literal(true) }).strict();
 const models = Prisma.dmmf.datamodel.models;
 function table(name: string) { const model = models.find(m => m.name === name)!; return Prisma.raw('"' + (model.dbName || name).replaceAll('"', '""') + '"'); }
@@ -74,7 +74,7 @@ async function plan(tx: Tx) {
     if (existing && !existing.enabled) conflicts.push(`${identity.name} معطلة؛ راجع حالتها في إدارة المؤسسات قبل المتابعة.`);
     if (!existing && institutions.some(u => u.slug === newSlugs[identity.categoryId])) conflicts.push(`رابط ${identity.name} مستخدم لمؤسسة أخرى.`);
     const mapping = mappings.find(m => m.categoryId === identity.categoryId);
-    if (mapping && (!existing || mapping.universityId !== existing.id || !mapping.enabled)) conflicts.push(`ربط ${identity.name} متعارض أو معطل.`);
+    if (mapping && (!existing || mapping.universityId !== existing.id)) conflicts.push(`ربط ${identity.name} متعارض.`);
     return { ...identity, existingId: existing?.id || null, slug: existing?.slug || newSlugs[identity.categoryId] };
   });
   const retained = VERIFIED_COURSE_MAPPINGS.map(expected => {
@@ -87,6 +87,8 @@ async function plan(tx: Tx) {
   });
   const allowed = new Set([...ids, ...retained, ...additions.map(i => i.existingId)]);
   if (institutions.some(u => !allowed.has(u.id))) conflicts.push('توجد مؤسسة خارج القائمة المعتمدة؛ لا تشملها موافقة الحذف الحالية.');
+  const approvedCategories = new Set<number>([...VERIFIED_COURSE_MAPPINGS.map(m => m.categoryId), ...reconciliationInstitutions.map(m => m.categoryId)]);
+  if (mappings.some(m => !approvedCategories.has(m.categoryId) && !ids.includes(m.universityId))) conflicts.push('توجد علاقة تصنيف خارج الروابط العشرة المعتمدة؛ أوقفت العملية لحماية الربط.');
   const [articles, academicPrograms, events, programs, links, sources, administrators, uploads, courses, ads] = await Promise.all([
     tx.article.findMany({ where: { universityId: within } }), tx.academicProgram.findMany({ where: { universityId: within } }),
     tx.event.findMany({ where: { universityId: within } }), tx.program.findMany({ where: { universityId: within } }),
@@ -142,9 +144,19 @@ export async function cleanupPreflight(db: PrismaClient, actor: Actor) {
   return db.$transaction(async tx => { await owner(tx, actor); const { privatePlan: _private, ...report } = await plan(tx); void _private; return report; }, { isolationLevel: 'RepeatableRead', timeout: 60000 });
 }
 export async function cleanupInstitutions(db: PrismaClient, actor: Actor, raw: unknown) {
+  if (!actor) throw new HttpError(403, 'FORBIDDEN', 'هذه العملية متاحة لمدير المنصة فقط.');
   const input = institutionCleanupRequest.parse(raw);
+  return executeCleanup(db, actor, input.snapshot);
+}
+// Local maintenance only. Never accept this execution mode from an HTTP body.
+// Possession of the application's database environment authorizes the CLI;
+// HTTP callers continue through cleanupInstitutions and its Owner/session checks.
+export async function cleanupInstitutionsForMaintenance(db: PrismaClient) {
+  return executeCleanup(db);
+}
+async function executeCleanup(db: PrismaClient, actor?: Actor, snapshot?: string) {
   return db.$transaction(async tx => {
-    await owner(tx, actor, true);
+    if (actor) await owner(tx, actor, true);
     await tx.$executeRaw`SET LOCAL lock_timeout = '5s'`;
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(270001)`;
     if (await tx.auditLog.findFirst({ where: { action: marker }, select: { id: true } })) return { completed: true, alreadyCompleted: true };
@@ -154,12 +166,12 @@ export async function cleanupInstitutions(db: PrismaClient, actor: Actor, raw: u
     const report = await plan(tx);
     if (report.completed) return { completed: true, alreadyCompleted: true };
     if (report.conflicts.length) throw new HttpError(409, 'CLEANUP_CONFLICT', report.conflicts.join(' '));
-    if (report.snapshot !== input.snapshot) throw new HttpError(409, 'STALE_PREFLIGHT', 'تغيّرت البيانات. أعد المراجعة قبل التأكيد.');
+    if (snapshot && report.snapshot !== snapshot) throw new HttpError(409, 'STALE_PREFLIGHT', 'تغيّرت البيانات. أعد المراجعة قبل التأكيد.');
     const p = report.privatePlan!;
     for (const identity of report.additions) {
       const institution = identity.existingId ? await tx.university.findUniqueOrThrow({ where: { id: identity.existingId } }) : await tx.university.create({ data: { slug: identity.slug, name: identity.name, institutionType: identity.institutionType } });
       if (institution.institutionType !== identity.institutionType || !institution.showInDirectory) await tx.university.update({ where: { id: institution.id }, data: { institutionType: identity.institutionType, showInDirectory: true } });
-      await tx.courseUniversityMapping.upsert({ where: { categoryId: identity.categoryId }, update: {}, create: { categoryId: identity.categoryId, universityId: institution.id } });
+      await tx.courseUniversityMapping.upsert({ where: { categoryId: identity.categoryId }, update: { enabled: true }, create: { categoryId: identity.categoryId, universityId: institution.id } });
     }
     const names = ['AdminBulkSelection', 'AdminPasswordReset', 'AdminSession', 'ArticleEdit', 'ArticleMedia', 'ArticleRegistrationLink', 'IngestionLog', 'ContentSync', 'UniversityApiKey', 'CourseExplanation', 'AcademicProgram', 'Article', 'Event', 'Program', 'ManagedLink', 'Advertisement', 'IngestionSource', 'Administrator'] as const;
     for (const name of names) {
@@ -179,7 +191,7 @@ export async function cleanupInstitutions(db: PrismaClient, actor: Actor, raw: u
     await tx.university.deleteMany({ where: { id: { in: p.ids } } });
     await remapCourses(tx);
     if (await tx.university.count() !== 10) throw new HttpError(409, 'FINAL_DIRECTORY_CONFLICT', 'لم يطابق الدليل المؤسسات العشر المعتمدة؛ أُلغيت التغييرات.');
-    await tx.auditLog.create({ data: { administratorId: actor.id, action: marker, entity: 'institution_directory', details: { counts: report.counts, removed: cleanupTargets.map(t => t.slug), retainedInstitutions: 10 } } });
+    await tx.auditLog.create({ data: { administratorId: actor?.id, action: marker, entity: 'institution_directory', details: { counts: report.counts, removed: cleanupTargets.map(t => t.slug), retainedInstitutions: 10, execution: actor ? 'owner_dashboard' : 'plesk_cli' } } });
     return { completed: true, counts: report.counts };
   }, { isolationLevel: 'Serializable', timeout: 60000 });
 }
